@@ -277,7 +277,85 @@ module Padrino
 
       def current_controller
         @_controller && @_controller.last
-      end
+      end  
+
+			def all_but(*args)   
+			  AllButPattern.new(self, *args)
+			end 
+
+			def only(*args) 
+				OnlyPattern.new(self, *args)   
+			end
+			
+			class AllButPattern 
+			  @@match = Struct.new(:captures)
+
+			  def initialize(app, *exceptions) 
+			    @controller = app.current_controller   
+			    @app = app
+			    @exceptions = exceptions
+			    @captures = @@match.new([])
+			  end
+
+			  def match(str)      
+			    if @exceptions.first.is_a?(Symbol)    
+			      @exceptions.each do |except| 
+			        if except.to_s.index('_')      
+			          if @app.router.runner.params.empty? 
+			            return @captures if @app.router.named_routes[except].path != str  
+			          else
+			            return @captures if @app.router.named_routes[except].url(@app.router.runner.params)[0] != str 
+			          end
+			        else 
+			          route_name = @controller.to_s << '_' << except.to_s 
+			          if @app.router.runner.params.empty? 
+			            return @captures if @app.router.named_routes[route_name.to_sym].path != str 
+			          else        
+			            return @captures if @app.router.named_routes[route_name.to_sym].url(@app.router.runner.params)[0] != str  
+			          end
+			        end
+			      end 
+			    elsif @exceptions.is_a?(Array)
+			      @captures unless @exceptions.include?(str)   
+			    end
+			    false
+			  end   
+			end  
+
+			class OnlyPattern 
+			  @@match = Struct.new(:captures)
+
+			  def initialize(app, *exceptions) 
+			    @controller = app.current_controller   
+			    @app = app
+			    @exceptions = exceptions
+			    @captures = @@match.new([])
+			  end
+
+			  def match(str)      
+			    if @exceptions.first.is_a?(Symbol)    
+			      @exceptions.each do |except| 
+			        if except.to_s.index('_')      
+			          if @app.router.runner.params.empty? 
+			            return @captures if @app.router.named_routes[except].path == str  
+			          else
+			            return @captures if @app.router.named_routes[except].url(@app.router.runner.params)[0] == str 
+			          end
+			        else 
+			          route_name = @controller.to_s << '_' << except.to_s 
+			          if @app.router.runner.params.empty? 
+			            return @captures if @app.router.named_routes[route_name.to_sym].path == str 
+			          else        
+			            return @captures if @app.router.named_routes[route_name.to_sym].url(@app.router.runner.params)[0] == str  
+			          end
+			        end
+			      end 
+			    elsif @exceptions.is_a?(Array)
+			      @captures if @exceptions.include?(str)   
+			    end
+			    false
+			  end   
+			end
 
       private
         # Parse params from the url method
