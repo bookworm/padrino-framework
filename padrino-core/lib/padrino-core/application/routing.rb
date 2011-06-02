@@ -273,6 +273,10 @@ module Padrino
 
         @conditions = conditions
         route('HEAD', path, *args, &block)
+      end  
+
+      def current_controller
+        @_controller && @_controller.last
       end
 
       private
@@ -405,10 +409,6 @@ module Padrino
 
           route.to(block)
           route
-        end
-
-        def current_controller
-          @_controller && @_controller.last
         end
 
         ##

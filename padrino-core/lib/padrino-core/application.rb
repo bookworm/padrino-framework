@@ -135,7 +135,7 @@ module Padrino
           "urls.rb", "config/urls.rb", "mailers/*.rb", "mailers.rb",
           "controllers/**/*.rb", "controllers.rb", "helpers/**/*.rb", "helpers.rb"
         ].map { |file| Dir[File.join(self.root, file)] }.flatten
-      end
+      end 
 
       protected
         ##
