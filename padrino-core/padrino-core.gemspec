@@ -22,14 +22,13 @@ Gem::Specification.new do |s|
   s.require_paths = ["lib"]
   s.rdoc_options  = ["--charset=UTF-8"]
 
-
   # TODO remove after a couple versions
-  s.post_install_message = "\e[32m  When upgrading, please 'enable :sessions' for each application"
+  s.post_install_message = "\e[32mPadrino: when upgrading, please 'enable :sessions' for each application"
   s.post_install_message << " as shown here:\e[0m http://bit.ly/kODKMx"
 
   s.add_dependency("tilt", "~> 1.3.0")
   s.add_dependency("sinatra", "~> 1.2.6")
   s.add_dependency("http_router", "~> 0.8.5")
-  s.add_dependency("thor", ">=0.14.3")
-  s.add_dependency("activesupport", ">= 3.0.0")
+  s.add_dependency("thor", "~> 0.14.3")
+  s.add_dependency("activesupport", "~> 3.0.0")
 end
