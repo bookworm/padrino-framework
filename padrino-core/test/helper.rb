@@ -9,6 +9,10 @@ require 'rack'
 require 'shoulda'
 require 'phocus'
 
+# Rubies < 1.9 don't handle hashes in the properly order so to prevent
+# this issue for now we remove extra values from mimetypes.
+Rack::Mime::MIME_TYPES.delete(".xsl") # In this way application/xml respond only to .xml
+
 module Kernel
   # Silences the output by redirecting to stringIO
   # silence_logger { ...commands... } => "...output..."
@@ -25,8 +29,7 @@ module Kernel
     yield
   ensure
     $VERBOSE = old_verbose
-  end unless respond_to?(:silence_warnings)
-
+  end
 end
 
 class Class

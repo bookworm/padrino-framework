@@ -1,10 +1,13 @@
-$:.unshift '/Users/joshbuddy/Development/http_router/lib'
-
 require 'http_router' unless defined?(HttpRouter)
 require 'padrino-core/support_lite' unless defined?(SupportLite)
 
 class Sinatra::Request #:nodoc:
-  attr_accessor :route_obj
+  attr_accessor :route_obj, :runner
+
+  def runner=(runner)
+    @runner = runner
+    env['padrino.instance'] = runner
+  end
 
   def controller
     route_obj && route_obj.controller
@@ -12,7 +15,49 @@ class Sinatra::Request #:nodoc:
 end
 
 class HttpRouter #:nodoc:
-  attr_accessor :runner
+  def rewrite_partial_path_info(env, request); end
+  def rewrite_path_info(env, request); end
+
+  def process_destination_path(path, env)
+    env['padrino.instance'].instance_eval do
+      request.route_obj = path.route
+      @_response_buffer = nil
+      @params ||= {}
+      @params.update(env['router.params'])
+      @block_params = if path.route.is_a?(HttpRouter::RegexRoute)
+        params_list = env['router.request'].extra_env['router.regex_match'].to_a
+        params_list.shift
+        @params[:captures] = params_list
+        params_list
+      else
+        env['router.request'].params
+      end
+      # Provide access to the current controller to the request
+      # Now we can eval route, but because we have "throw halt" we need to be
+      # (en)sure to reset old layout and run controller after filters.
+      old_params = @params
+      parent_layout = @layout
+      successful = false
+      begin
+        filter! :before
+        (path.route.before_filters - self.class.filters[:before]).each { |filter| instance_eval(&filter)} if path.route.before_filters
+        # If present set current controller layout
+        @layout = path.route.use_layout if path.route.use_layout
+        @route = path.route
+        @route.custom_conditions.each { |blk| pass if instance_eval(&blk) == false } if @route.custom_conditions
+        @block_params = @block_params.slice(0, path.route.dest.arity) if path.route.dest.arity > 0
+        halt_response = catch(:halt) { route_eval(&path.route.dest) }
+        @_response_buffer = halt_response.is_a?(Array) ? halt_response.last : halt_response
+        successful = true
+        halt @_response_buffer
+      ensure
+        (@_pending_after_filters ||= []).concat(path.route.after_filters) if path.route.after_filters && successful
+        @layout = parent_layout
+        @params = old_params
+      end
+    end
+  end
+
   class Route #:nodoc:
     attr_reader :before_filters, :after_filters
     attr_accessor :custom_conditions, :use_layout, :controller, :cache
@@ -36,13 +81,38 @@ class HttpRouter #:nodoc:
     end
 
     def custom_conditions=(custom_conditions)
-      custom_conditions.each { |blk| arbitrary { |req, params| router.runner.instance_eval(&blk) != false } } if custom_conditions
       @custom_conditions = custom_conditions
     end
   end
 end
 
 module Padrino
+  class Filter
+    attr_reader :block
+
+    def initialize(mode, options, args, &block)
+      @mode, @options, @args, @block = mode, options, args, block
+    end
+
+    def apply?(request)
+      return true if @args.empty? && @options.empty?
+      detect = @args.any? do |arg|
+        case arg
+        when Symbol then request.route_obj.named == arg
+        else             arg === request.path_info
+        end
+      end or @options.any? { |name, val| val === request.send(:name) }
+      detect ^ !@mode
+    end
+
+    def to_proc
+      filter = self
+      proc {
+        instance_eval(&filter.block) if filter.apply?(request)
+      }
+    end
+  end
+
   ##
   # Padrino provides advanced routing definition support to make routes and url generation much easier.
   # This routing system supports named route aliases and easy access to url paths.
@@ -161,8 +231,8 @@ module Padrino
           @_defaults,   original_defaults   = options, @_defaults
 
           # Application defaults
-          @filters,     original_filters = { :before => [], :after => [] }, @filters
-          @layout,      original_layout         = nil, @layout
+          @filters,     original_filters    = { :before => @filters[:before].dup, :after => @filters[:after].dup }, @filters
+          @layout,      original_layout     = nil, @layout
 
           instance_eval(&block)
 
@@ -179,6 +249,22 @@ module Padrino
         end
       end
       alias :controllers :controller
+
+      def before(*args, &block)
+        @filters[:before] << (args.empty? ? block : construct_filter(*args, &block))
+      end
+
+      def after(*args, &block)
+        @filters[:after] << (args.empty? ? block : construct_filter(*args, &block))
+      end
+
+      def construct_filter(*args, &block)
+        options = args.last.is_a?(Hash) ? args.pop : {}
+        except = options.key?(:except) && Array(options.delete(:except))
+        raise("You cannot use except with other options specified") if except && (!args.empty? || !options.empty?)
+        options = except.last.is_a?(Hash) ? except.pop : {} if except
+        Filter.new(!except, options, Array(except || args), &block)
+      end
 
       ##
       # Provides many parents with shallowing.
@@ -475,16 +561,14 @@ module Padrino
           invoke_hook(:padrino_route_added, route, verb, path, args, options, block)
 
           # Add Application defaults
+          route.before_filters = @filters[:before]
+          route.after_filters  = @filters[:after]
           if @_controller
-            route.before_filters = @filters[:before]
-            route.after_filters  = @filters[:after]
             route.use_layout     = @layout
             route.controller     = Array(@_controller).first.to_s
-          else
-            route.before_filters = @filters[:before] || []
-            route.after_filters  = @filters[:after]  || []
+            @filters[:before].clear
+            @filters[:after].clear
           end
-
           route.to(block)
           route
         end
@@ -633,11 +717,7 @@ module Padrino
             # per rfc2616-sec14:
             # Assume */* if no ACCEPT header is given.
             catch_all = (accepts.delete "*/*" || accepts.empty?)
-            if accepts.empty?
-              matching_types  = mime_types.slice(0,1)
-            else
-              matching_types  = (accepts & mime_types)
-            end
+            matching_types = accepts.empty? ? mime_types.slice(0,1) : (accepts & mime_types)
 
             if params[:format]
               accept_format = params[:format]
@@ -746,51 +826,29 @@ module Padrino
       end
 
       private
-        ##
-        # Compatibility with http_router
-        #
+        def dispatch!
+          static! if settings.static? && (request.get? || request.head?)
+          route!
+        rescue Sinatra::NotFound => boom
+          handle_not_found!(boom)
+        rescue ::Exception => boom
+          handle_exception!(boom)
+        ensure
+          @_pending_after_filters.each { |filter| instance_eval(&filter)} if @_pending_after_filters
+        end
+
         def route!(base=self.class, pass_block=nil)
-          base.router.runner = self
-          if base.router and match = base.router.recognize(@request.env) { |match|
-            request.route_obj = match.path.route
-            @_response_buffer = nil
-            if match.path.route.is_a?(HttpRouter::RegexRoute)
-              params_list = match.request.extra_env['router.regex_match'].to_a
-              params_list.shift
-              @block_params = params_list
-              @params.update({:captures => params_list}.merge(@params || {}))
-            else
-              @block_params = match.param_values
-              @params.update(match.params.merge(@params || {}))
-            end
-            parent_layout = @layout
-            @params ||= {}
-            @layout = match.path.route.use_layout if match.path.route.use_layout
-            # Provide access to the current controller to the request
-            # Now we can eval route, but because we have "throw halt" we need to be
-            # (en)sure to reset old layout and run controller after filters.
-            begin
-              old_params = @params
-              match.path.route.before_filters.each { |filter| instance_eval(&filter) } if match.path.route.before_filters
-              # If present set current controller layout
-              @route = match.path.route
-              @block_params = @block_params.slice(0, match.path.route.dest.arity) if match.path.route.dest.arity > 0
-              match.acceptance_response = catch(:halt) { route_eval(&match.path.route.dest) } || ''
-            ensure
-              @layout = parent_layout
-              (@_pending_after_filters ||= []).concat(match.path.route.after_filters) if match.path.route.after_filters
-              @params = old_params
-            end
-          }
-            if match.respond_to?(:path)
-              throw :halt, @_response_buffer = match.acceptance_response
-            elsif match.respond_to?(:each)
+          @request.env['padrino.instance'] = self
+          if base.router and match = base.router.call(@request.env)
+            if match.respond_to?(:each)
               route_eval do
                 match[1].each {|k,v| response[k] = v}
                 status match[0]
                 route_missing if match[0] == 404
               end
             end
+          else
+            filter! :before
           end
 
           # Run routes defined in superclass.
@@ -803,7 +861,6 @@ module Padrino
 
           route_missing
         ensure
-          @_pending_after_filters.each { |aft| instance_eval(&aft) } if @_pending_after_filters
         end
     end # InstanceMethods
   end # Routing
