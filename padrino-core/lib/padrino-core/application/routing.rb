@@ -90,15 +90,15 @@ module Padrino
   class Filter
     attr_reader :block
 
-    def initialize(mode, options, args, &block)
-      @mode, @options, @args, @block = mode, options, args, block
+    def initialize(mode, scoped_controller, options, args, &block)
+      @mode, @scoped_controller, @options, @args, @block = mode, scoped_controller, options, args, block
     end
 
     def apply?(request)
       return true if @args.empty? && @options.empty?
       detect = @args.any? do |arg|
         case arg
-        when Symbol then request.route_obj.named == arg
+        when Symbol then request.route_obj.named == arg or request.route_obj.named == [@scoped_controller, arg].flatten.join("_").to_sym
         else             arg === request.path_info
         end
       end || @options.any? { |name, val|
@@ -207,6 +207,30 @@ module Padrino
       #     end
       #   end
       #
+      # You can specify conditions to run for all routes:
+      #
+      #   controller :conditions => {:protect => true} do
+      #     def self.protect(protected)
+      #       condition do
+      #         halt 403, "No secrets for you!" unless params[:key] == "s3cr3t"
+      #       end if protected
+      #     end
+      #
+      #     # This route will only return "secret stuff" if the user goes to
+      #     # `/private?key=s3cr3t`.
+      #     get("/private") { "secret stuff" }
+      #
+      #     # And this one, too!
+      #     get("/also-private") { "secret stuff" }
+      #
+      #     # But you can override the conditions for each route as needed.
+      #     # This route will be publicly accessible without providing the
+      #     # secret key.
+      #     get :index, :protect => false do
+      #       "Welcome!"
+      #     end
+      #   end
+      #
       # You can supply default values:
       #
       #   controller :lang => :de do
@@ -233,6 +257,7 @@ module Padrino
           @_use_format, original_use_format = options.delete(:use_format), @_use_format
           @_cache,      original_cache      = options.delete(:cache), @_cache
           @_map,        original_map        = options.delete(:map), @_map
+          @_conditions, original_conditions = options.delete(:conditions), @_conditions
           @_defaults,   original_defaults   = options, @_defaults
 
           # Application defaults
@@ -248,7 +273,7 @@ module Padrino
           # Controller defaults
           @_controller, @_parents, @_cache = original_controller, original_parent, original_cache
           @_defaults, @_provides, @_map  = original_defaults, original_provides, original_map
-          @_use_format = original_use_format
+          @_conditions, @_use_format = original_conditions, original_use_format
         else
           include(*args) if extensions.any?
         end
@@ -256,11 +281,11 @@ module Padrino
       alias :controllers :controller
 
       def before(*args, &block)
-        @filters[:before] << (args.empty? ? block : construct_filter(*args, &block))
+        add_filter :before, &(args.empty? ? block : construct_filter(*args, &block))
       end
 
       def after(*args, &block)
-        @filters[:after] << (args.empty? ? block : construct_filter(*args, &block))
+        add_filter :after, &(args.empty? ? block : construct_filter(*args, &block))
       end
 
       def construct_filter(*args, &block)
@@ -268,7 +293,7 @@ module Padrino
         except = options.key?(:except) && Array(options.delete(:except))
         raise("You cannot use except with other options specified") if except && (!args.empty? || !options.empty?)
         options = except.last.is_a?(Hash) ? except.pop : {} if except
-        Filter.new(!except, options, Array(except || args), &block)
+        Filter.new(!except, @_controller, options, Array(except || args), &block)
       end
 
       ##
@@ -352,7 +377,7 @@ module Padrino
         url[0,0] = conform_uri(ENV['RACK_BASE_URI']) if ENV['RACK_BASE_URI']
         url = "/" if url.blank?
         url
-      rescue HttpRouter::UngeneratableRouteException
+      rescue HttpRouter::InvalidRouteException
         route_error = "route mapping for url(#{name.inspect}) could not be found!"
         raise Padrino::Routing::UnrecognizedException.new(route_error)
       end
@@ -517,6 +542,7 @@ module Padrino
           route_options[:provides] = @_provides if @_provides
           path, *route_options[:with] = path if path.is_a?(Array)
           path, name, options = *parse_route(path, route_options, verb)
+          options.reverse_merge!(@_conditions) if @_conditions
 
           # Sinatra defaults
           define_method "#{verb} #{path}", &block
@@ -575,8 +601,6 @@ module Padrino
           if @_controller
             route.use_layout     = @layout
             route.controller     = Array(@_controller).first.to_s
-            @filters[:before].clear
-            @filters[:after].clear
           end
           route.to(block)
           route

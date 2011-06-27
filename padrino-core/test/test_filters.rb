@@ -29,7 +29,7 @@ class TestFilters < Test::Unit::TestCase
     get '/foo', {}, { "HTTP_ACCEPT" => 'text/html' }
     assert_equal 406, status
   end
-  
+
   should "allow passing & halting in before filters" do
     mock_app do
       controller do
@@ -146,6 +146,27 @@ class TestFilters < Test::Unit::TestCase
     assert_equal '', body
   end
 
+  should "be able to filter based on a symbol for a controller" do
+    mock_app do
+      controller :foo do
+        before(:test) { @test = 'foo'}
+        get :test do
+          @test.to_s + " response"
+        end
+      end
+      controller :bar do
+        before(:test) { @test = 'bar'}
+        get :test do
+          @test.to_s + " response"
+        end
+      end
+    end
+    get '/foo/test'
+    assert_equal 'foo response', body
+    get '/bar/test'
+    assert_equal 'bar response', body
+  end
+
   should "be able to filter based on a symbol or path" do
     mock_app do
       before(:index, '/main') { @test = 'before'}
@@ -210,5 +231,36 @@ class TestFilters < Test::Unit::TestCase
     assert_equal '', body
     get "/", {}, {'HTTP_USER_AGENT' => 'This is IE'}
     assert_equal 'before', body
+  end
+
+  should "be able to filter based on a symbol or path in multiple controller" do
+    mock_app do
+      controllers :foo do
+        before(:index, '/foo/main') { @test = 'before' }
+        get :index do
+          @test
+        end
+        get :main do
+          @test
+        end
+      end
+      controllers :bar do
+        before(:index, '/bar/main') { @test = 'also before' }
+        get :index do
+          @test
+        end
+        get :main do
+          @test
+        end
+      end
+    end
+    get '/foo'
+    assert_equal 'before', body
+    get '/bar'
+    assert_equal 'also before', body
+    get '/foo/main'
+    assert_equal 'before', body
+    get '/bar/main'
+    assert_equal 'also before', body
   end
 end

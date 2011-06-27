@@ -101,9 +101,9 @@ class TestRouting < Test::Unit::TestCase
       post("/main"){ "hello" }
     end
     assert_equal 3, app.routes.size, "should generate GET, HEAD and PUT"
-    assert_equal ["GET"],  app.routes[0].as_options[:conditions][:request_method]
-    assert_equal ["HEAD"], app.routes[1].as_options[:conditions][:request_method]
-    assert_equal ["POST"], app.routes[2].as_options[:conditions][:request_method]
+    assert_equal ["GET"],  app.routes[0].conditions[:request_method]
+    assert_equal ["HEAD"], app.routes[1].conditions[:request_method]
+    assert_equal ["POST"], app.routes[2].conditions[:request_method]
   end
 
   should 'generate basic urls' do
@@ -1274,6 +1274,46 @@ class TestRouting < Test::Unit::TestCase
     end
     get "/.json"
     assert_equal "foo", body
+  end
+
+  should "pass controller conditions to each route" do
+    counter = 0
+
+    mock_app do
+      self.class.send(:define_method, :increment!) do |*args|
+        condition { counter += 1 }
+      end
+
+      controller :posts, :conditions => {:increment! => true} do
+        get("/foo") { "foo" }
+        get("/bar") { "bar" }
+      end
+
+    end
+
+    get "/posts/foo"
+    get "/posts/bar"
+    assert_equal 2, counter
+  end
+
+  should "allow controller conditions to be overridden" do
+    counter = 0
+
+    mock_app do
+      self.class.send(:define_method, :increment!) do |increment|
+        condition { counter += 1 } if increment
+      end
+
+      controller :posts, :conditions => {:increment! => true} do
+        get("/foo") { "foo" }
+        get("/bar", :increment! => false) { "bar" }
+      end
+
+    end
+
+    get "/posts/foo"
+    get "/posts/bar"
+    assert_equal 1, counter
   end
 
   should "parse params with class level provides" do
