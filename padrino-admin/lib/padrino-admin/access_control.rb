@@ -48,29 +48,38 @@ module Padrino
         ##
         # Return an array of project_modules
         #
-        def project_modules(account)
-          role = account.role.to_sym rescue :any
-          authorizations = @authorizations.find_all { |auth| auth.roles.include?(role) }
-          authorizations.map(&:project_modules).flatten.uniq
+        def project_modules(account)       
+          acc_roles = account.roles if account.respond_to?('roles')
+          acc_roles = [account.role.to_sym] if !acc_roles
+          authorizations = nil
+          acc_roles.each do |role|   
+            role = role.to_sym
+            authorizations = @authorizations.find_all { |auth| auth.roles.include?(role) }
+          end    
+          authorizations.collect(&:project_modules).flatten.uniq
         end
 
         ##
         # Return true if the given account is allowed to see the given path.
         #
-        def allowed?(account=nil, path=nil)
+        def allowed?(account=nil, path=nil)   
           path = "/" if path.blank?
-          role = account.role.to_sym rescue nil
           authorizations = @authorizations.find_all { |auth| auth.roles.include?(:any) }
-          allowed_paths  = authorizations.map(&:allowed).flatten.uniq
-          denied_paths   = authorizations.map(&:denied).flatten.uniq
-          if account
+          allowed_paths  = authorizations.collect(&:allowed).flatten.uniq
+          denied_paths   = authorizations.collect(&:denied).flatten.uniq        
+          if account      
             denied_paths.clear
-            authorizations = @authorizations.find_all { |auth| auth.roles.include?(role) }
-            allowed_paths += authorizations.map(&:allowed).flatten.uniq
-            authorizations = @authorizations.find_all { |auth| !auth.roles.include?(role) && !auth.roles.include?(:any) }
-            denied_paths  += authorizations.map(&:allowed).flatten.uniq
-            denied_paths  += authorizations.map(&:denied).flatten.uniq
-          end
+            acc_roles = account.roles if account.respond_to?('roles') 
+            acc_roles = [account.role.to_sym] if !acc_roles
+            acc_roles.each do |role|  
+              role = role.to_sym
+              authorizations = @authorizations.find_all { |auth| auth.roles.include?(role) }
+              allowed_paths += authorizations.collect(&:allowed).flatten.uniq
+              authorizations = @authorizations.find_all { |auth| !auth.roles.include?(role) && !auth.roles.include?(:any) }
+              denied_paths  += authorizations.collect(&:allowed).flatten.uniq
+              denied_paths  += authorizations.collect(&:denied).flatten.uniq   
+            end
+          end  
           return true  if allowed_paths.any? { |p| path =~ /^#{p}/ }
           return false if denied_paths.any?  { |p| path =~ /^#{p}/ }
           true
