@@ -222,12 +222,22 @@ module Padrino
           when :css then 'stylesheets'
           when :js  then 'javascripts'
           else kind.to_s
+        end  
+        @@count ||= 0  
+        if @@count < asset_host_limit
+           @@count = @@count + 1 
+        else
+           @@count = 1
         end
         source = source.to_s.gsub(/\s/, '%20')
         ignore_extension = (asset_folder.to_s == kind.to_s) # don't append extension
         source << ".#{kind}" unless ignore_extension or source =~ /\.#{kind}/
-        result_path   = source if source =~ %r{^/} # absolute path
-        result_path ||= uri_root_path(asset_folder, source)
+        result_path  = source if source =~ %r{^/} # absolute path 
+        if self.class.respond_to?(:asset_host)
+          result_path ||= asset_host_path(asset_folder, source)
+        else
+          result_path ||= uri_root_path(asset_folder, source)
+        end
         timestamp = asset_timestamp(result_path)
         "#{result_path}#{timestamp}"
       end
@@ -240,6 +250,17 @@ module Padrino
         def uri_root_path(*paths)
           root_uri = self.class.uri_root if self.class.respond_to?(:uri_root)
           File.join(ENV['RACK_BASE_URI'].to_s, root_uri || '/', *paths)
+        end    
+        
+        def asset_host_path(*paths)  
+          asset_host = self.class.asset_host    
+          asset_host = asset_host.gsub!("%d", @@count.to_s) if asset_host.index('%d')
+          File.join(asset_host, '/', *paths)
+        end  
+        
+        def asset_host_limit()
+          return 4 unless self.class.respond_to?(:asset_host_count)   
+          self.class.asset_host_count
         end
 
         ##
