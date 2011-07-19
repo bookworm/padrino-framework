@@ -254,7 +254,7 @@ module Padrino
         
         def asset_host_path(*paths)  
           asset_host = self.class.asset_host    
-          asset_host = asset_host.gsub!("%d", @@count.to_s) if asset_host.index('%d')
+          asset_host = asset_host.gsub("%d", @@count.to_s) if asset_host.index('%d')
           File.join(asset_host, '/', *paths)
         end  
         
