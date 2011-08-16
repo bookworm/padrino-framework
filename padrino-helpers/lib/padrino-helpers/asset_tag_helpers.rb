@@ -234,7 +234,7 @@ module Padrino
         source << ".#{kind}" unless ignore_extension or source =~ /\.#{kind}/
         result_path  = source if source =~ %r{^/} # absolute path 
         if self.class.respond_to?(:asset_host)
-          result_path ||= asset_host_path(asset_folder, source)
+          result_path ||= asset_host_path(asset_folder, source) 
         else
           result_path ||= uri_root_path(asset_folder, source)
         end
@@ -247,8 +247,9 @@ module Padrino
         ##
         # Returns the uri root of the application.
         #
-        def uri_root_path(*paths)
+        def uri_root_path(*paths)      
           root_uri = self.class.uri_root if self.class.respond_to?(:uri_root)
+          root_uri = self.class.asset_uri_root if self.class.respond_to?(:asset_uri_root)
           File.join(ENV['RACK_BASE_URI'].to_s, root_uri || '/', *paths)
         end    
         
