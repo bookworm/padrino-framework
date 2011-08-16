@@ -2,12 +2,7 @@ require 'http_router' unless defined?(HttpRouter)
 require 'padrino-core/support_lite' unless defined?(SupportLite)
 
 class Sinatra::Request #:nodoc:
-  attr_accessor :route_obj, :runner
-
-  def runner=(runner)
-    @runner = runner
-    env['padrino.instance'] = runner
-  end
+  attr_accessor :route_obj
 
   def controller
     route_obj && route_obj.controller
@@ -19,7 +14,7 @@ class HttpRouter #:nodoc:
   def rewrite_path_info(env, request); end
 
   def process_destination_path(path, env)
-    env['padrino.instance'].instance_eval do
+    Thread.current['padrino.instance'].instance_eval do
       request.route_obj = path.route
       @_response_buffer = nil
       @params ||= {}
@@ -95,10 +90,9 @@ module Padrino
     end
 
     def apply?(request)
-      return true if @args.empty? && @options.empty?
       detect = @args.any? do |arg|
         case arg
-        when Symbol then request.route_obj.named == arg or request.route_obj.named == [@scoped_controller, arg].flatten.join("_").to_sym
+        when Symbol then request.route_obj && (request.route_obj.named == arg or request.route_obj.named == [@scoped_controller, arg].flatten.join("_").to_sym)
         else             arg === request.path_info
         end
       end || @options.any? { |name, val|
@@ -111,10 +105,12 @@ module Padrino
     end
 
     def to_proc
-      filter = self
-      proc {
-        instance_eval(&filter.block) if filter.apply?(request)
-      }
+      if @args.empty? && @options.empty?
+        block
+      else
+        filter = self
+        proc { instance_eval(&filter.block) if filter.apply?(request) }
+      end
     end
   end
 
@@ -623,8 +619,8 @@ module Padrino
           map = options.delete(:map)
 
           if path.kind_of?(Symbol) # path i.e :index or :show
-            name = path                       # The route name
-            path = map ? map.dup : path.to_s  # The route path
+            name = path                                                # The route name
+            path = map ? map.dup : (path == :index ? '/' : path.to_s)  # The route path
           end
 
           if path.kind_of?(String) # path i.e "/index" or "/show"
@@ -672,11 +668,11 @@ module Padrino
 
             # Small reformats
             path.gsub!(%r{/\?$}, '(/)')                    # Remove index path
-            path.gsub!(%r{/?index/?}, '/')                 # Remove index path
             path.gsub!(%r{//$}, '/')                       # Remove index path
             path[0,0] = "/" unless path =~ %r{^\(?/}       # Paths must start with a /
             path.sub!(%r{/(\))?$}, '\\1') if path != "/"   # Remove latest trailing delimiter
             path.gsub!(/\/(\(\.|$)/, '\\1')                # Remove trailing slashes
+            path.squeeze!('/')
           end
 
           # Merge in option defaults
@@ -700,7 +696,7 @@ module Padrino
         def process_path_for_parent_params(path, parent_params)
           parent_prefix = parent_params.flatten.compact.uniq.map do |param|
             map  = (param.respond_to?(:map) && param.map ? param.map : param.to_s)
-            part = "#{map}/:#{param}_id/"
+            part = "#{map}/:#{param.to_s.singularize}_id/"
             part = "(#{part})" if param.respond_to?(:optional) && param.optional?
             part
           end
@@ -747,7 +743,7 @@ module Padrino
           condition do
             mime_types        = types.map { |t| mime_type(t) }
             request.path_info =~ /\.([^\.\/]+)$/
-            url_format        = $1.to_sym if $1
+            url_format        = params[:format].to_sym if params[:format]
             accepts           = request.accept.map { |a| a.split(";")[0].strip }
 
             # per rfc2616-sec14:
@@ -755,9 +751,7 @@ module Padrino
             catch_all = (accepts.delete "*/*" || accepts.empty?)
             matching_types = accepts.empty? ? mime_types.slice(0,1) : (accepts & mime_types)
 
-            if params[:format]
-              accept_format = params[:format]
-            elsif !url_format && matching_types.first
+            if !url_format && matching_types.first
               type = ::Rack::Mime::MIME_TYPES.find { |k, v| v == matching_types.first }[0].sub(/\./,'').to_sym
               accept_format = CONTENT_TYPE_ALIASES[type] || type
             elsif catch_all
@@ -866,16 +860,18 @@ module Padrino
           static! if settings.static? && (request.get? || request.head?)
           route!
         rescue Sinatra::NotFound => boom
+          filter! :before
           handle_not_found!(boom)
         rescue ::Exception => boom
+          filter! :before
           handle_exception!(boom)
         ensure
           @_pending_after_filters.each { |filter| instance_eval(&filter)} if @_pending_after_filters
         end
 
         def route!(base=self.class, pass_block=nil)
-          @request.env['padrino.instance'] = self
-          if base.compiled_router and match = base.router.call(@request.env)
+          Thread.current['padrino.instance'] = self
+          if base.compiled_router and match = base.compiled_router.call(@request.env)
             if match.respond_to?(:each)
               route_eval do
                 match[1].each {|k,v| response[k] = v}

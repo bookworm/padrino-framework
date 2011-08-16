@@ -48,9 +48,15 @@ end
 
 group :cache do
   gem "redis",     ">= 2.0.0"
+  gem "mongo",     ">= 1.3.1"
   platforms :mri do
-    gem "memcached", ">= 0.20.1"
+    gem "bson_ext",  ">= 1.3.1"
     gem 'dalli',     ">= 1.0.2"
+    # TODO enable and fix in travis-ci
+    # gem "memcached", ">= 0.20.1"
+  end
+  platform :rbx do
+    gem 'dalli',  ">= 1.0.2"
   end
   platform :jruby do
     gem "jruby-memcache-client"

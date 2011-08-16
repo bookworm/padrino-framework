@@ -1,6 +1,28 @@
 = CHANGES
 
-== 0.10.1 (Not Yet Released)
+== 0.10.2 (Not Yet Released)
+
+* Added support for TravisCI with build configurations
+* Fixes issue with reloader and libxml2 [Thanks farcaller]
+* Fixes cache tests so they don't fail on CI
+
+== 0.10.1
+
+* Added a Mongo store for padrino-cache [Thanks to aliem]
+* Adds restful support for parent controller declaration
+* Before filters are called regardless of matching
+* Fix env['padrino.instance'] where create a loop and is too long to show in Padrino::ShowExceptions.
+* Compat with Slim 1.0, Compat with Ruby 1.9.3. FIX #596
+* Translation fixes for IT, CS, DE, NL, and more with locale tests
+* Fixes for FR, CN and RU locales [Thanks to TweeKane]
+* Compatibility with Bundler > 1.0 in Gemfile
+* Admin generator properly destroys access control on removal
+* Fixes admin generation when used with namespaced models
+* Allow logger to be configured before load [Thanks to skade]
+* Fix an error message [Thanks mariozig]
+* Fix doc bug in logger [Thanks Xylakant]
+* Adds host parameter to DM Postgresql Adapter [Thanks to Aigeruth]
+* Cleanup models folder in apps that is no longer used by default
 
 == 0.10.0
 
