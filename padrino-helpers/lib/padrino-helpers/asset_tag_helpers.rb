@@ -217,20 +217,18 @@ module Padrino
       #   asset_path :images, 'example.jpg'
       #
       def asset_path(kind, source)
-        return source if source =~ /^http/
-        asset_folder  = case kind     
-          when :css     
-            if self.class.respond_to?(:stylesheets_path)  
-              then self.class.stylesheets_path
-            end       
-            then 'stylesheets'
-          when :js 
-            if self.class.respond_to?(:javascripts_path)  
-              then self.class.javascripts_path
-            end       
-            then 'javascripts'
-          else kind.to_s
-        end  
+        return source if source =~ /^http/    
+
+        if kind == :js   
+          asset_folder = 'stylesheets'
+          asset_folder = self.class.stylesheets_path if self.class.respond_to?(:stylesheets_path)
+        elsif kind == :js  
+          asset_folder = 'javascripts'
+          asset_folder = self.class.javascripts_path if self.class.respond_to?(:javascripts_path)                
+        else
+           asset_folder  = kind.to_s
+        end
+
         @@count ||= 0  
         if @@count < asset_host_limit
            @@count = @@count + 1 
