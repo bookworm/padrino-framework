@@ -218,9 +218,17 @@ module Padrino
       #
       def asset_path(kind, source)
         return source if source =~ /^http/
-        asset_folder  = case kind
-          when :css then 'stylesheets'
-          when :js  then 'javascripts'
+        asset_folder  = case kind     
+          when :css     
+            if self.class.respond_to?(:stylesheets_path)  
+              then self.class.stylesheets_path
+            end       
+            then 'stylesheets'
+          when :js 
+            if self.class.respond_to?(:javascripts_path)  
+              then self.class.javascripts_path
+            end       
+            then 'javascripts'
           else kind.to_s
         end  
         @@count ||= 0  
