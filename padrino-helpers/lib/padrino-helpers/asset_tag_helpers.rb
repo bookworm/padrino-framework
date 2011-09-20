@@ -336,12 +336,12 @@ module Padrino
       def asset_path(kind, source)
         return source if source =~ /^http/    
 
-        if kind == :js   
+        if kind == :css  
           asset_folder = 'stylesheets'
-          asset_folder = self.class.stylesheets_path if self.class.respond_to?(:stylesheets_path)
+          asset_folder = settings.stylesheets_path if self.class.respond_to?(:stylesheets_path)
         elsif kind == :js  
           asset_folder = 'javascripts'
-          asset_folder = self.class.javascripts_path if self.class.respond_to?(:javascripts_path)                
+          asset_folder = settings.javascripts_path if self.class.respond_to?(:javascripts_path)                
         else
            asset_folder  = kind.to_s
         end
