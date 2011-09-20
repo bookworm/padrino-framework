@@ -39,6 +39,7 @@ module Padrino
       def include_constants
         @_include_constants ||= []
       end
+
       ##
       # Reload all files with changes detected.
       #
@@ -107,6 +108,7 @@ module Padrino
       # A safe Kernel::require which issues the necessary hooks depending on results
       #
       def safe_load(file, options={})
+        began_at    = Time.now
         force, file = options[:force], figure_path(file)
 
         # Check if file was changed or if force a reload
@@ -134,8 +136,8 @@ module Padrino
 
         # And finally load the specified file
         begin
-          logger.devel "Loading #{file}"   if !reload
-          logger.debug "Reloading #{file}" if  reload
+          logger.devel :loading, began_at, file if !reload
+          logger.debug :reload,  began_at, file if  reload
           $LOADED_FEATURES.delete(file)
           verbosity_was, $-v = $-v, nil
           loaded = false
@@ -143,7 +145,7 @@ module Padrino
           loaded = true
           MTIMES[file] = File.mtime(file)
         rescue SyntaxError => e
-          logger.error "Cannot require #{file} because of syntax error: #{e.message}"
+          logger.error "Cannot require #{file} due to a syntax error: #{e.message}"
         ensure
           $-v = verbosity_was
           new_constants = (ObjectSpace.classes - klasses).uniq

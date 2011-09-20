@@ -7,7 +7,7 @@ module Padrino
       # By default, cached content is persisted with a "file store"--that is, in a
       # subdirectory of your application root.
       #
-      # ==== Examples
+      # @example
       #   # Setting content expiry time
       #   class CachedApp < Padrino::Application
       #     enable :caching          # turns on caching mechanism
@@ -43,41 +43,69 @@ module Padrino
         # be executed; rather, its previous output will be sent to the client with a
         # 200 OK status code.
         #
+        # @param [Integer] time
+        #   Time til expiration (seconds)
+        #
+        # @example
+        #   controller '/blog', :cache => true do
+        #     expires_in 15
+        #
+        #     get '/entries' do
+        #       # expires_in 15 => can also be defined inside a single route
+        #       'just broke up eating twinkies lol'
+        #     end
+        #   end
+        #
+        # @api public
         def expires_in(time)
-          @_last_expires_in = time
+          @route.cache_expires_in = time if @route
+          @_last_expires_in       = time
         end
 
         ##
         # This helper is used within a route or route to indicate the name in the cache.
         #
+        # @param [Symbol] name
+        #   cache key
+        #
+        # @example
+        #   controller '/blog', :cache => true do
+        #
+        #     get '/post/:id' do
+        #       cache_key :my_name
+        #       @post = Post.find(params[:id])
+        #     end
+        #   end
+        #
+        # @api public
         def cache_key(name)
-          @_cache_key = name
+          @route.cache_key = name
         end
 
-        def self.padrino_route_added(route, verb, path, args, options, block) #:nodoc:
+        # @api private
+        def self.padrino_route_added(route, verb, path, args, options, block) # @private
           if route.cache and %w(GET HEAD).include?(verb)
-            route.add_before_filter(Proc.new {
+            route.before_filters do
               if settings.caching?
                 began_at = Time.now
-                value = settings.cache.get(@_cache_key || env['PATH_INFO'])
-                @_cache_key = nil
-                logger.debug "GET Cache (%0.4fms) %s" % [Time.now-began_at, env['PATH_INFO']] if defined?(logger) && value
+                value = settings.cache.get(@route.cache_key || env['PATH_INFO'])
+                logger.debug "GET Cache", began_at, env['PATH_INFO'] if defined?(logger) && value
                 halt 200, value if value
               end
-            })
-            route.add_after_filter(Proc.new { |_|
+            end
+
+            route.after_filters do
               if settings.caching?
                 began_at = Time.now
                 if @_last_expires_in
-                  settings.cache.set(@_cache_key || env['PATH_INFO'], @_response_buffer, :expires_in => @_last_expires_in)
+                  settings.cache.set(@route.cache_key || env['PATH_INFO'], @_response_buffer, :expires_in => @_last_expires_in)
                   @_last_expires_in = nil
                 else
-                  settings.cache.set(@_cache_key || env['PATH_INFO'], @_response_buffer)
+                  settings.cache.set(@route.cache_key || env['PATH_INFO'], @_response_buffer)
                 end
-                @_cache_key = nil
-                logger.debug "SET Cache (%0.4fms) %s" % [Time.now-began_at, env['PATH_INFO']] if defined?(logger)
+                logger.debug "SET Cache", began_at, env['PATH_INFO'] if defined?(logger)
               end
-            })
+            end
           end
         end
       end # Page

@@ -2,17 +2,19 @@ require 'padrino-core/support_lite' unless defined?(SupportLite)
 
 module Padrino
   ##
-  # Padrino enhances the Sinatra ‘render’ method to have support for automatic template engine detection,
-  # enhanced layout functionality, locale enabled rendering, among other features.
+  # Padrino enhances the Sinatra ‘render’ method to have support for
+  # automatic template engine detection, enhanced layout functionality,
+  # locale enabled rendering, among other features.
   #
   module Rendering
-    class TemplateNotFound < RuntimeError #:nodoc:
+    class TemplateNotFound < RuntimeError
     end
 
     ##
-    # This is an array of file patterns to ignore.
-    # If your editor add a suffix during editing to your files please add it like:
+    # This is an array of file patterns to ignore. If your editor add a
+    # suffix during editing to your files please add it like:
     #
+    # @example
     #   Padrino::Rendering::IGNORE_FILE_PATTERN << /~$/
     #
     IGNORE_FILE_PATTERN = [
@@ -20,12 +22,12 @@ module Padrino
     ] unless defined?(IGNORE_FILE_PATTERN)
 
     ##
-    # Default rendering options used in the #render-method
+    # Default rendering options used in the #render-method.
     #
     DEFAULT_RENDERING_OPTIONS = { :strict_format => false, :raise_exceptions => true } unless defined?(DEFAULT_RENDERING_OPTIONS)
 
     ##
-    # Main class that register this extension
+    # Main class that register this extension.
     #
     class << self
       def registered(app)
@@ -49,6 +51,11 @@ module Padrino
       # +app+/+views+/+layouts+/+custom+.(+haml+|+erb+|+xxx+)
       # +app+/+views+/+custom+.(+haml+|+erb+|+xxx+)
       #
+      # @param [Symbol] name (:layout)
+      #   The layout to use.
+      #
+      # @yield []
+      #
       def layout(name=:layout, &block)
         return super(name, &block) if block_given?
         @layout = name
@@ -57,16 +64,19 @@ module Padrino
       ##
       # Returns the cached template file to render for a given url, content_type and locale.
       #
-      # render_options = [template_path, content_type, locale]
+      # @param [Array<template_path, content_type, locale>] render_options
       #
       def fetch_template_file(render_options)
         (@_cached_templates ||= {})[render_options]
       end
 
-      ###
+      ##
       # Caches the template file for the given rendering options
       #
-      # render_options = [template_path, content_type, locale]
+      # @param [String] template_file
+      #   The path of the template file.
+      #
+      # @param [Array<template_path, content_type, locale>] render_options
       #
       def cache_template_file!(template_file, render_options)
         (@_cached_templates ||= {})[render_options] = template_file || []
@@ -74,6 +84,9 @@ module Padrino
 
       ##
       # Returns the cached layout path.
+      #
+      # @param [Symbol, nil] given_layout
+      #   The requested layout.
       #
       def fetch_layout_path(given_layout=nil)
         layout_name = given_layout || @layout || :application
@@ -90,8 +103,36 @@ module Padrino
     module InstanceMethods
       attr_reader :current_engine
 
-      def content_type(type=nil, params={}) #:nodoc:
-        type.nil? ? @_content_type : super(type, params)
+      ##
+      # Get/Set the content_type
+      #
+      # @param [String, nil] type
+      #   The Content-Type to use.
+      #
+      # @param [Symbol, nil] type.
+      #   Look and parse the given symbol to the matched Content-Type.
+      #
+      # @param [Hash] params
+      #   Additional params to append to the Content-Type.
+      #
+      # @example
+      #   case content_type
+      #     when :js then do_some
+      #     when :css then do_another
+      #   end
+      #
+      #   content_type :js
+      #   # => set the response with 'application/javascript' Content-Type
+      #   content_type 'text/html'
+      #
+      #   # => set directly the Content-Type to 'text/html'
+      #
+      def content_type(type=nil, params={})
+        unless type.nil?
+          super(type, params)
+          @_content_type = type
+        end
+        @_content_type
       end
 
       private
@@ -108,7 +149,7 @@ module Padrino
         #
         def render(engine, data=nil, options={}, locals={}, &block)
           # If engine is a hash then render data converted to json
-          return engine.to_json if engine.is_a?(Hash)
+          content_type(:json, :charset => 'utf-8') and return engine.to_json if engine.is_a?(Hash)
 
           # If engine is nil, ignore engine parameter and shift up all arguments
           # render nil, "index", { :layout => true }, { :localvar => "foo" }
@@ -121,7 +162,7 @@ module Padrino
 
           # If data is unassigned then this is a likely a template to be resolved
           # This means that no engine was explicitly defined
-          data, engine = *resolve_template(engine, options) if data.nil?
+          data, engine = *resolve_template(engine, options.dup) if data.nil?
 
           # Setup root
           root = settings.respond_to?(:root) ? settings.root : ""
@@ -135,10 +176,8 @@ module Padrino
             options[:layout] = layout_path || false # We need to force layout false so sinatra don't try to render it
             options[:layout] = false unless layout_engine == engine # TODO allow different layout engine
             options[:layout_engine] = layout_engine || engine if options[:layout]
-            logger.debug "Resolving layout #{root}/views#{options[:layout]}" if defined?(logger) && options[:layout].present?
           elsif options[:layout].present?
             options[:layout] = settings.fetch_layout_path(options[:layout] || @layout)
-            logger.debug "Resolving layout #{root}/views#{options[:layout]}" if defined?(logger)
           end
 
           # Cleanup the template
@@ -153,13 +192,13 @@ module Padrino
         end
 
         ##
-        # Returns the located layout tuple to be used for the rendered template (if available)
+        # Returns the located layout tuple to be used for the rendered template
+        # (if available).
         #
-        # ==== Example
-        #
-        # resolve_layout
-        # => ["/layouts/custom", :erb]
-        # => [nil, nil]
+        # @example
+        #   resolve_layout
+        #   # => ["/layouts/custom", :erb]
+        #   # => [nil, nil]
         #
         def resolved_layout
           located_layout = resolve_template(settings.fetch_layout_path, :raise_exceptions => false, :strict_format => true)
@@ -167,25 +206,42 @@ module Padrino
         end
 
         ##
-        # Returns the template path and engine that match content_type (if present), I18n.locale.
+        # Returns the template path and engine that match content_type (if present),
+        # I18n.locale.
         #
-        # === Options
+        # @param [String] template_path
+        #   The path of the template.
         #
-        #   :strict_format::  The resolved template must match the content_type of the request (defaults to false)
-        #   :raise_exceptions::  Raises a +TemplateNotFound+ exception if the template cannot be located.
+        # @param [Hash] options
+        #   Additional options.
         #
-        # ==== Example
+        # @option options [Boolean] :strict_format (false)
+        #   The resolved template must match the content_type of the request.
         #
+        # @option options [Boolean] :raise_exceptions (false)
+        #   Raises a {TemplateNotFound} exception if the template cannot be located.
+        #
+        # @return [Array<Symbol, Symbol>]
+        #   The path and format of the template.
+        #
+        # @raise [TemplateNotFound]
+        #   The template could not be found.
+        #
+        # @example
         #   get "/foo", :provides => [:html, :js] do; render 'path/to/foo'; end
         #   # If you request "/foo.js" with I18n.locale == :ru => [:"/path/to/foo.ru.js", :erb]
         #   # If you request "/foo" with I18n.locale == :de => [:"/path/to/foo.de.haml", :haml]
         #
         def resolve_template(template_path, options={})
+          began_at = Time.now
           # Fetch cached template for rendering options
-          template_path = "/#{template_path}" unless template_path.to_s[0] == ?/
+          template_path = template_path.to_s[0] == ?/ ? template_path.to_s : "/#{template_path}"
           rendering_options = [template_path, content_type, locale]
           cached_template = settings.fetch_template_file(rendering_options)
-          return cached_template if cached_template
+          if cached_template
+            logger.debug :cached, began_at, cached_template[0] if settings.logging? && defined?(logger)
+            return cached_template
+          end
 
           # Resolve view path and options
           options.reverse_merge!(DEFAULT_RENDERING_OPTIONS)
@@ -214,11 +270,12 @@ module Padrino
 
           raise TemplateNotFound, "Template '#{template_path}' not found in '#{view_path}'!"  if !located_template && options[:raise_exceptions]
           settings.cache_template_file!(located_template, rendering_options) unless settings.reload_templates?
+          logger.debug :template, began_at, located_template[0] if settings.logging? && defined?(logger)
           located_template
         end
 
         ##
-        # Return the I18n.locale if I18n is defined
+        # Return the I18n.locale if I18n is defined.
         #
         def locale
           I18n.locale if defined?(I18n)

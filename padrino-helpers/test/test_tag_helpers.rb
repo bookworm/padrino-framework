@@ -1,7 +1,7 @@
 require File.expand_path(File.dirname(__FILE__) + '/helper')
 require File.expand_path(File.dirname(__FILE__) + '/fixtures/markup_app/app')
 
-class TestTagHelpers < Test::Unit::TestCase
+describe "TagHelpers" do
   def app
     MarkupDemo.tap { |app| app.set :environment, :test }
   end
@@ -33,6 +33,11 @@ class TestTagHelpers < Test::Unit::TestCase
     should "support open tags" do
       actual_html = tag(:p, :class => 'demo', :open => true)
       assert_equal "<p class=\"demo\">", actual_html
+    end
+
+    should "escape html" do
+      actual_html = tag(:br, :class => 'Example "bar"')
+      assert_equal "<br class=\"Example &quot;bar&quot;\" />", actual_html
     end
   end
 

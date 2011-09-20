@@ -20,21 +20,27 @@ module Padrino
   ] unless defined?(PADRINO_IGNORE_CALLERS)
 
   ##
-  # Add rubinius (and hopefully other VM impls) ignore patterns ...
+  # Add rubinius (and hopefully other VM implementations) ignore patterns ...
   #
   PADRINO_IGNORE_CALLERS.concat(RUBY_IGNORE_CALLERS) if defined?(RUBY_IGNORE_CALLERS)
 
   private
     ##
-    # Returns the filename for the file that is the direct caller (first caller)
+    # The filename for the file that is the direct caller (first caller).
+    #
+    # @return [String]
+    #   The file the caller method exists in.
     #
     def self.first_caller
       caller_files.first
     end
 
-    ##
-    # Like Kernel#caller but excluding certain magic entries and without
+    #
+    # Like +Kernel#caller+ but excluding certain magic entries and without
     # line / method information; the resulting array contains filenames only.
+    #
+    # @return [Array<String>]
+    #   The files of the calling methods.
     #
     def self.caller_files
       caller(1).

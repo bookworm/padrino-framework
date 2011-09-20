@@ -20,7 +20,14 @@ module Padrino
         # This helper is used anywhere in your application you would like to associate a fragment
         # to be cached. It can be used in within a route:
         #
-        # ==== Examples
+        # @param [String] key
+        #   cache key
+        # @param [Hash] opts
+        #   cache options, e.g :expires_in
+        # @param [Proc]
+        #   Execution result to store in the cache
+        #
+        # @example
         #   # Caching a fragment
         #   class MyTweets < Padrino::Application
         #     enable :caching          # turns on caching mechanism
@@ -40,16 +47,17 @@ module Padrino
         #     end
         #   end
         #
+        # @api public
         def cache(key, opts = nil, &block)
           if settings.caching?
             began_at = Time.now
             if value = settings.cache.get(key.to_s)
-              logger.debug "GET Fragment (%0.4fms) %s" % [Time.now-began_at, key.to_s] if defined?(logger)
+              logger.debug "GET Fragment", began_at, key.to_s if defined?(logger)
               concat_content(value)
             else
               value = capture_html(&block)
               settings.cache.set(key.to_s, value, opts)
-              logger.debug "SET Fragment (%0.4fms) %s" % [Time.now-began_at, key.to_s] if defined?(logger)
+              logger.debug "SET Fragment", began_at, key.to_s if defined?(logger)
               concat_content(value)
             end
           end
