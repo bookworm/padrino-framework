@@ -343,7 +343,7 @@ module Padrino
           asset_folder = 'javascripts'
           asset_folder = settings.javascripts_path if self.class.respond_to?(:javascripts_path)                
         else
-           asset_folder  = kind.to_s
+           asset_folder = kind.to_s
         end
 
         @@count ||= 0  
@@ -370,16 +370,12 @@ module Padrino
         ##
         # Returns the uri root of the application.
         #
-<<<<<<< HEAD
-        def uri_root_path(*paths)      
-=======
         # @example
         #   uri_root_path("/some/path") => "/base/some/path"
         #
         def uri_root_path(*paths)
->>>>>>> upstream/master
-          root_uri = self.class.uri_root if self.class.respond_to?(:uri_root)
-          root_uri = self.class.asset_uri_root if self.class.respond_to?(:asset_uri_root)
+          root_uri = self.settings.uri_root if self.class.respond_to?(:uri_root)
+          root_uri = self.settings.asset_uri_root if self.class.respond_to?(:asset_uri_root)
           File.join(ENV['RACK_BASE_URI'].to_s, root_uri || '/', *paths)
         end    
         
