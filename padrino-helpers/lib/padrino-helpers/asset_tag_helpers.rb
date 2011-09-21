@@ -354,7 +354,7 @@ module Padrino
         end
         source = source.to_s.gsub(/\s/, '%20')
         ignore_extension = (asset_folder.to_s == kind.to_s) # don't append extension
-        source << ".#{kind}" unless ignore_extension or source =~ /\.#{kind}/
+        source << ".#{kind}" unless (ignore_extension && !(kind == :js or kind == :css) ) or source =~ /\.#{kind}/
         result_path  = source if source =~ %r{^/} # absolute path 
         if self.class.respond_to?(:asset_host)
           result_path ||= asset_host_path(asset_folder, source) 
