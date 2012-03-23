@@ -1,5 +1,8 @@
 module Padrino
   module Helpers
+    ###
+    # Helpers related to formatting or manipulating text within templates.
+    #
     module FormatHelpers
       ##
       # Returns escaped text to protect against malicious content
@@ -78,7 +81,7 @@ module Padrino
       # @api public
       def simple_format(text, options={})
         t = options.delete(:tag) || :p
-        start_tag = tag(t, options.merge(:open => true))
+        start_tag = tag(t, options, true)
         text = text.to_s.dup
         text.gsub!(/\r\n?/, "\n")                    # \r\n and \r -> \n
         text.gsub!(/\n\n+/, "</#{t}>\n\n#{start_tag}")  # 2+ newline  -> paragraph
@@ -206,7 +209,7 @@ module Padrino
       #     The words to be highlighted in the +text+.
       #   @param [Hash] options
       #     Formatting options for the highlight.
-      #   @option options [String] :highlighter (’<strong class="highlight">\1</strong>’)
+      #   @option options [String] :highlighter ('<strong class="highlight">\1</strong>')
       #     The html pattern for wrapping the highlighted words.
       #
       # @return [String] The text with the words specified wrapped with highlighted spans.
@@ -372,7 +375,7 @@ module Padrino
         javascript_mapping = { '\\' => '\\\\', '</' => '<\/', "\r\n" => '\n', "\n" => '\n', "\r" => '\n', '"' => '\\"', "'" => "\\'" }
         html_content.gsub(/(\\|<\/|\r\n|[\n\r"'])/) { javascript_mapping[$1] }
       end
-
+      alias :escape_javascript :js_escape_html
     end # FormatHelpers
   end # Helpers
 end # Padrino
