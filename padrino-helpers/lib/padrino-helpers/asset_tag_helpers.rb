@@ -343,15 +343,6 @@ module Padrino
       def asset_path(kind, source)
         return source if source =~ /^http/    
 
-        if kind == :css  
-          asset_folder = 'stylesheets'
-          asset_folder = settings.stylesheets_path if self.class.respond_to?(:stylesheets_path)
-        elsif kind == :js  
-          asset_folder = 'javascripts'
-          asset_folder = settings.javascripts_path if self.class.respond_to?(:javascripts_path)                
-        else
-           asset_folder = kind.to_s
-        end
 
         @@count ||= 0  
         if @@count < asset_host_limit
@@ -426,11 +417,17 @@ module Padrino
       #   asset_folder_name(:images) => 'images'
       #
       def asset_folder_name(kind)
-        case kind
-        when :css then 'stylesheets'
-        when :js  then 'javascripts'
-        else kind.to_s
-        end
+        if kind == :css  
+          asset_folder = 'stylesheets'
+          asset_folder = settings.stylesheets_path if self.class.respond_to?(:stylesheets_path)
+        elsif kind == :js  
+          asset_folder = 'javascripts'
+          asset_folder = settings.javascripts_path if self.class.respond_to?(:javascripts_path)                
+        else
+          asset_folder = kind.to_s
+        end 
+        
+        return asset_folder
       end
 
       ##
