@@ -341,7 +341,6 @@ module Padrino
       #
       # @api semipublic
       def asset_path(kind, source)
-<<<<<<< HEAD
         return source if source =~ /^http/    
 
         if kind == :css  
@@ -361,15 +360,12 @@ module Padrino
            @@count = 1
         end
 
-        return source if source =~ /^http/
         is_absolute  = source =~ %r{^/}
         asset_folder = asset_folder_name(kind)
         source = source.to_s.gsub(/\s/, '%20')
         ignore_extension = (asset_folder.to_s == kind.to_s) # don't append an extension
         source << ".#{kind}" unless (ignore_extension && !(kind == :js or kind == :css) ) or source =~ /\.#{kind}/        
-        
-        result_path = is_absolute ? source : uri_root_path(asset_folder, source)
-        
+                
         if self.class.respond_to?(:asset_host)
           result_path ||= asset_host_path(asset_folder, source) 
         elsif is_absolute  
