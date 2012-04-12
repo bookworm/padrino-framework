@@ -1691,5 +1691,33 @@ describe "Routing" do
     end
     get @app.url(:index, :page => 10)
     assert_equal "/paginate/66", body
-  end
+  end   
+  
+  should 'handle multiple paths' do   
+    mock_app do     
+      get :cats, [{:map => '/cats'}, {:map => '/kitties'}] do  
+        'cats'
+      end
+    end    
+    get '/cats'
+    assert_equal "cats", body
+  end     
+  
+  should 'handle multiple paths with hosts' do   
+    mock_app do    
+      get :kittens, [{:map => '/kittens', :host => 'example.org'}, {:map => '/cows', :host => 'bob.com'}, 
+        {:map => '/cats', :host => 'example.org'}] do       
+        'kittens'
+      end    
+    end 
+          
+    get '/kittens' 
+    assert_equal "kittens", body
+    
+    get '/cows'
+    assert_equal 404, status            
+    
+    get '/cats' 
+    assert_equal "kittens", body
+  end      
 end

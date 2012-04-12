@@ -619,14 +619,90 @@ module Padrino
         #   get :list, :provides => [:html, :js, :json]            # => "/list(.{!format,js|json})"
         #   get :list, :priority => :low                           # Defers route to be last
         #   get /pattern/, :name => :foo, :generate_with => '/foo' # Generates :foo as /foo
-        def route(verb, path, *args, &block)
-          options = case args.size
-            when 2
+        def route(verb, path, *args, &block) 
+          routes = []      
+          if args.first.is_a?(Array)    
+            args.first.each do |args_set| 
+              routes << route_options([args_set])
+            end   
+            args.delete_at(0)
+          else    
+            routes << route_options(args)
+          end
+          merge_options = route_options(args)    
+
+          method_name = "#{verb} #{path}"     
+          unbound_method = generate_method(method_name, &block)
+
+          block = block.arity != 0 ?
+            proc { |a,p| unbound_method.bind(a).call(*p) } :
+            proc { |a,p| unbound_method.bind(a).call }
+     
+          routes.each do |route_o|               
+            route_o.merge!(merge_options) 
+            options = route_o 
+
+            # Do padrino parsing. We dup options so we can build HEAD request correctly
+            route_options = options.dup
+            route_options[:provides] = @_provides if @_provides
+            path, *route_options[:with] = path if path.is_a?(Array)    
+
+            path2, name, options, route_options = *parse_route(path, route_options, verb)
+            options.reverse_merge!(@_conditions) if @_conditions   
+
+            # Sinatra defaults
+            invoke_hook(:route_added, verb, path, block)
+
+            # HTTPRouter route construction  
+            route = router.add(path2, route_options)     
+            route.name(name) if name       
+            priority_name = options.delete(:priority) || :normal
+            priority = ROUTE_PRIORITY[priority_name] or raise("Priority #{priority_name} not recognized, try #{ROUTE_PRIORITY.keys.join(', ')}")
+            route.cache = options.key?(:cache) ? options.delete(:cache) : @_cache
+            route.send(verb.downcase.to_sym)
+            route.host(options.delete(:host)) if options.key?(:host)
+            route.user_agent(options.delete(:agent)) if options.key?(:agent)
+            if options.key?(:default_values)
+              defaults = options.delete(:default_values)
+              route.default(defaults) if defaults
+            end
+            options.delete_if do |option, args|
+              if route.send(:significant_variable_names).include?(option)
+                route.matching(option => Array(args).first)
+                true
+              end
+            end
+
+            # Add Sinatra conditions
+            options.each { |o, a| route.respond_to?(o) ? route.send(o, *a) : send(o, *a) }
+            conditions, @conditions = @conditions, []
+            route.custom_conditions.concat(conditions)
+
+            invoke_hook(:padrino_route_added, route, verb, path, args, options, block)
+
+            # Add Application defaults
+            route.before_filters.concat(@filters[:before])
+            route.after_filters.concat(@filters[:after])
+            if @_controller
+              route.use_layout = @layout
+              route.controller = Array(@_controller)[0].to_s
+            end
+
+            deferred_routes[priority] << [route, block]
+          end     
+        end 
+          
+        ##
+        # Parses the route options from args. Don't call this directly.
+        #  
+        def route_options(args)    
+          case args.size
+            when 2        
               args.last.merge(:map => args.first)
-            when 1
+            when 1   
               map = args.shift if args.first.is_a?(String)
               if args.first.is_a?(Hash)
-                map ? args.first.merge(:map => map) : args.first
+                map ? args.first.merge(:map => map) : args.first       
               else
                 {:map => map || args.first}
               end
@@ -634,62 +710,6 @@ module Padrino
               {}
             else raise
           end
-
-          # Do padrino parsing. We dup options so we can build HEAD request correctly
-          route_options = options.dup
-          route_options[:provides] = @_provides if @_provides
-          path, *route_options[:with] = path if path.is_a?(Array)
-          path, name, options, route_options = *parse_route(path, route_options, verb)
-          options.reverse_merge!(@_conditions) if @_conditions
-
-          # Sinatra defaults
-          method_name = "#{verb} #{path}"
-          unbound_method = generate_method(method_name, &block)
-
-          block = block.arity != 0 ?
-            proc { |a,p| unbound_method.bind(a).call(*p) } :
-            proc { |a,p| unbound_method.bind(a).call }
-
-          invoke_hook(:route_added, verb, path, block)
-
-          # HTTPRouter route construction
-          route = router.add(path, route_options)
-          route.name(name) if name
-          priority_name = options.delete(:priority) || :normal
-          priority = ROUTE_PRIORITY[priority_name] or raise("Priority #{priority_name} not recognized, try #{ROUTE_PRIORITY.keys.join(', ')}")
-          route.cache = options.key?(:cache) ? options.delete(:cache) : @_cache
-          route.send(verb.downcase.to_sym)
-          route.host(options.delete(:host)) if options.key?(:host)
-          route.user_agent(options.delete(:agent)) if options.key?(:agent)
-          if options.key?(:default_values)
-            defaults = options.delete(:default_values)
-            route.default(defaults) if defaults
-          end
-          options.delete_if do |option, args|
-            if route.send(:significant_variable_names).include?(option)
-              route.matching(option => Array(args).first)
-              true
-            end
-          end
-
-          # Add Sinatra conditions
-          options.each { |o, a| route.respond_to?(o) ? route.send(o, *a) : send(o, *a) }
-          conditions, @conditions = @conditions, []
-          route.custom_conditions.concat(conditions)
-
-          invoke_hook(:padrino_route_added, route, verb, path, args, options, block)
-
-          # Add Application defaults
-          route.before_filters.concat(@filters[:before])
-          route.after_filters.concat(@filters[:after])
-          if @_controller
-            route.use_layout = @layout
-            route.controller = Array(@_controller)[0].to_s
-          end
-
-          deferred_routes[priority] << [route, block]
-
-          route
         end
 
         ##
