@@ -57,13 +57,13 @@ module Padrino
           acc_roles = account.roles if account.respond_to?('roles')
           acc_roles = [account.role.to_sym] if !acc_roles
 
-          authorizations = nil
+          authorizations = []
           acc_roles.each do |role|   
             role = role.to_sym
             authorizations << @authorizations.find_all { |auth| auth.roles.include?(role) }
           end    
 
-          authorizations.map(&:project_modules).flatten.uniq
+          authorizations.flatten.uniq.map(&:project_modules).flatten.uniq
         end
 
         ##
