@@ -101,12 +101,13 @@ module Padrino
         #
         def allowed?(account=nil, path=nil)
           path = "/" if path.blank?
+          
           authorizations = @authorizations.find_all { |auth| auth.roles.include?(:any) }
           allowed_paths  = authorizations.collect(&:allowed).flatten.uniq
           denied_paths   = authorizations.collect(&:denied).flatten.uniq        
+
           if account      
             denied_paths.clear
-<<<<<<< HEAD
             acc_roles = account.roles if account.respond_to?('roles') 
             acc_roles = [account.role.to_sym] if !acc_roles
             acc_roles.each do |role|  
@@ -118,16 +119,7 @@ module Padrino
               denied_paths  += authorizations.collect(&:denied).flatten.uniq   
             end
           end  
-=======
-            # explicit authorizations for the role associated with the given account
-            authorizations = @authorizations.find_all { |auth| auth.roles.include?(role) }
-            allowed_paths += authorizations.map(&:allowed).flatten.uniq
-            # other explicit authorizations
-            authorizations = @authorizations.find_all { |auth| !auth.roles.include?(role) && !auth.roles.include?(:any) }
-            denied_paths  += authorizations.map(&:allowed).flatten.uniq # remove paths explicitly allowed for other roles
-            denied_paths  += authorizations.map(&:denied).flatten.uniq # remove paths explicitly denied to other roles
-          end
->>>>>>> upstream/master
+
           return true  if allowed_paths.any? { |p| path =~ /^#{p}/ }
           return false if denied_paths.any?  { |p| path =~ /^#{p}/ }
           true
