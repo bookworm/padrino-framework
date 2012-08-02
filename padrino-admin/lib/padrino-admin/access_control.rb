@@ -56,12 +56,14 @@ module Padrino
         def project_modules(account)       
           acc_roles = account.roles if account.respond_to?('roles')
           acc_roles = [account.role.to_sym] if !acc_roles
+
           authorizations = nil
           acc_roles.each do |role|   
             role = role.to_sym
-            authorizations = @authorizations.find_all { |auth| auth.roles.include?(role) }
+            authorizations << @authorizations.find_all { |auth| auth.roles.include?(role) }
           end    
-          authorizations.collect(&:project_modules).flatten.uniq
+
+          authorizations.map(&:project_modules).flatten.uniq
         end
 
         ##
@@ -103,20 +105,25 @@ module Padrino
           path = "/" if path.blank?
           
           authorizations = @authorizations.find_all { |auth| auth.roles.include?(:any) }
-          allowed_paths  = authorizations.collect(&:allowed).flatten.uniq
-          denied_paths   = authorizations.collect(&:denied).flatten.uniq        
+          allowed_paths  = authorizations.map(&:allowed).flatten.uniq
+          denied_paths   = authorizations.map(&:denied).flatten.uniq       
 
           if account      
             denied_paths.clear
+
             acc_roles = account.roles if account.respond_to?('roles') 
             acc_roles = [account.role.to_sym] if !acc_roles
             acc_roles.each do |role|  
               role = role.to_sym
+
+              # explicit authorizations for the role associated with the given account
               authorizations = @authorizations.find_all { |auth| auth.roles.include?(role) }
-              allowed_paths += authorizations.collect(&:allowed).flatten.uniq
+              allowed_paths += authorizations.map(&:allowed).flatten.uniq
+
+              # other explicit authorizations
               authorizations = @authorizations.find_all { |auth| !auth.roles.include?(role) && !auth.roles.include?(:any) }
-              denied_paths  += authorizations.collect(&:allowed).flatten.uniq
-              denied_paths  += authorizations.collect(&:denied).flatten.uniq   
+              denied_paths  += authorizations.map(&:allowed).flatten.uniq # remove paths explicitly allowed for other roles
+              denied_paths  += authorizations.map(&:denied).flatten.uniq # remove paths explicitly denied to other roles
             end
           end  
 
