@@ -106,6 +106,7 @@ module Padrino
           denied_paths   = authorizations.collect(&:denied).flatten.uniq        
           if account      
             denied_paths.clear
+<<<<<<< HEAD
             acc_roles = account.roles if account.respond_to?('roles') 
             acc_roles = [account.role.to_sym] if !acc_roles
             acc_roles.each do |role|  
@@ -117,6 +118,16 @@ module Padrino
               denied_paths  += authorizations.collect(&:denied).flatten.uniq   
             end
           end  
+=======
+            # explicit authorizations for the role associated with the given account
+            authorizations = @authorizations.find_all { |auth| auth.roles.include?(role) }
+            allowed_paths += authorizations.map(&:allowed).flatten.uniq
+            # other explicit authorizations
+            authorizations = @authorizations.find_all { |auth| !auth.roles.include?(role) && !auth.roles.include?(:any) }
+            denied_paths  += authorizations.map(&:allowed).flatten.uniq # remove paths explicitly allowed for other roles
+            denied_paths  += authorizations.map(&:denied).flatten.uniq # remove paths explicitly denied to other roles
+          end
+>>>>>>> upstream/master
           return true  if allowed_paths.any? { |p| path =~ /^#{p}/ }
           return false if denied_paths.any?  { |p| path =~ /^#{p}/ }
           true
@@ -154,9 +165,9 @@ module Padrino
         ##
         # Create a project module
         #
-        def project_module(name, path)
+        def project_module(name, path, options={})
           allow(path)
-          @project_modules << ProjectModule.new(name, path)
+          @project_modules << ProjectModule.new(name, path, options)
         end
       end # Authorization
 
@@ -164,10 +175,10 @@ module Padrino
       # Project Module class
       #
       class ProjectModule
-        attr_reader :name
+        attr_reader :name, :options
 
-        def initialize(name, path) # @private
-          @name, @path = name, path
+        def initialize(name, path, options={}) # @private
+          @name, @path, @options = name, path, options
         end
 
         ##
