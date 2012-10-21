@@ -186,6 +186,9 @@ module Padrino
           elsif options[:layout].present?
             options[:layout] = settings.fetch_layout_path(options[:layout] || @layout)
           end
+          
+          # Delete strict format option. Because some engines do not like it.
+          options.delete(:strict_format)
 
           # Cleanup the template
           @current_engine, engine_was = engine, @current_engine
