@@ -10,13 +10,22 @@ describe "PluginGenerator" do
     `rm -rf #{@apptmp}`
   end
 
+  context "the plugin generator" do
+    should "respect --root option" do
+      path = File.expand_path('../fixtures/plugin_template.rb', __FILE__)
+      capture_io { generate(:project, 'sample_project', "--root=#{@apptmp}") }
+      out, err = capture_io { generate(:plugin, path, "--root=#{@apptmp}/sample_project") }
+      refute_match /You are not at the root/, out
+    end
+  end
+
   context "the plugin destroy option" do
     should "remove the plugin instance" do
       path = File.expand_path('../fixtures/plugin_template.rb', __FILE__)
       capture_io { generate(:project, 'sample_project', "--root=#{@apptmp}") }
       capture_io { generate(:plugin, path, "--root=#{@apptmp}/sample_project") }
       capture_io { generate(:plugin, path, "--root=#{@apptmp}/sample_project", '-d') }
-      assert_no_file_exists("#{@apptmp}/sample_project/lib/hoptoad_init.rb")
+      assert_no_file_exists("#{@apptmp}/sample_project/lib/hoptoad_initializer.rb")
       assert_no_match_in_file(/enable \:raise_errors/,"#{@apptmp}/sample_project/app/app.rb")
       assert_no_match_in_file(/rack\_hoptoad/, "#{@apptmp}/sample_project/Gemfile")
     end

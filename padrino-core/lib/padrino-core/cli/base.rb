@@ -13,7 +13,7 @@ module Padrino
       desc "start", "Starts the Padrino application (alternatively use 's')."
       map "s" => :start
       method_option :server,    :type => :string,  :aliases => "-a", :desc => "Rack Handler (default: autodetect)"
-      method_option :host,      :type => :string,  :aliases => "-h", :required => true, :default => "0.0.0.0", :desc => "Bind to HOST address."
+      method_option :host,      :type => :string,  :aliases => "-h", :required => true, :default => '127.0.0.1', :desc => "Bind to HOST address."
       method_option :port,      :type => :numeric, :aliases => "-p", :required => true, :default => 3000, :desc => "Use PORT."
       method_option :daemonize, :type => :boolean, :aliases => "-d", :desc => "Run daemonized in the background."
       method_option :pid,       :type => :string,  :aliases => "-i", :desc => "File to store pid."
@@ -48,8 +48,10 @@ module Padrino
         ARGV.concat(args)
         puts "=> Executing Rake #{ARGV.join(' ')} ..."
         load File.expand_path('../rake.rb', __FILE__)
-        require File.expand_path('config/boot.rb')
-        PadrinoTasks.init(true)
+        Rake.application.init
+        Rake.application.instance_variable_set(:@rakefile, __FILE__)
+        load File.expand_path('Rakefile')
+        Rake.application.top_level
       end
 
       desc "console", "Boots up the Padrino application irb console (alternatively use 'c')."
@@ -69,7 +71,6 @@ module Padrino
       desc "generate", "Executes the Padrino generator with given options (alternatively use 'gen' or 'g')."
       map ["gen", "g"] => :generate
       def generate(*args)
-        # Build Padrino g as an alias of padrino-gen
         begin
           # We try to load the vendored padrino-gen if exist
           padrino_gen_path = File.expand_path('../../../../../padrino-gen/lib', __FILE__)
@@ -109,48 +110,50 @@ module Padrino
       end
 
       private
-        def prepare(task)
-          if options.help?
-            help(task.to_s)
-            raise SystemExit
-          end
-          ENV["PADRINO_ENV"] ||= ENV["RACK_ENV"] ||= options.environment.to_s
-          chdir(options.chdir)
-          unless File.exist?('config/boot.rb')
-            puts "=> Could not find boot file in: #{options.chdir}/config/boot.rb !!!"
-            raise SystemExit
-          end
+
+      def prepare(task)
+        if options.help?
+          help(task.to_s)
+          raise SystemExit
         end
+        ENV["PADRINO_ENV"] ||= ENV["RACK_ENV"] ||= options.environment.to_s
+        chdir(options.chdir)
+        unless File.exist?('config/boot.rb')
+          puts "=> Could not find boot file in: #{options.chdir}/config/boot.rb !!!"
+          raise SystemExit
+        end
+      end
 
       protected
-        def self.banner(task=nil, *args)
-          "padrino #{task.name}"
+
+      def self.banner(task=nil, *args)
+        "padrino #{task.name}"
+      end
+
+      def chdir(dir)
+        return unless dir
+        begin
+          Dir.chdir(dir.to_s)
+        rescue Errno::ENOENT
+          puts "=> Specified Padrino root '#{dir}' does not appear to exist!"
+        rescue Errno::EACCES
+          puts "=> Specified Padrino root '#{dir}' cannot be accessed by the current user!"
+        end
+      end
+
+      def capture(stream)
+        begin
+          stream = stream.to_s
+          eval "$#{stream} = StringIO.new"
+          yield
+          result = eval("$#{stream}").string
+        ensure
+          eval("$#{stream} = #{stream.upcase}")
         end
 
-        def chdir(dir)
-          return unless dir
-          begin
-            Dir.chdir(dir.to_s)
-          rescue Errno::ENOENT
-            puts "=> Specified Padrino root '#{dir}' does not appear to exist!"
-          rescue Errno::EACCES
-            puts "=> Specified Padrino root '#{dir}' cannot be accessed by the current user!"
-          end
-        end
-
-        def capture(stream)
-          begin
-            stream = stream.to_s
-            eval "$#{stream} = StringIO.new"
-            yield
-            result = eval("$#{stream}").string
-          ensure
-            eval("$#{stream} = #{stream.upcase}")
-          end
-
-          result
-        end
-        alias :silence :capture
-    end # Base
-  end # Cli
-end # Padrino
+        result
+      end
+      alias :silence :capture
+    end
+  end
+end

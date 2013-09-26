@@ -7,11 +7,12 @@ module Padrino
       # The defined duration for the expiration edge.
       EXPIRES_EDGE = 86400
 
+      autoload :Base,     'padrino-cache/store/base'
       autoload :File,     'padrino-cache/store/file'
       autoload :Memcache, 'padrino-cache/store/memcache'
       autoload :Memory,   'padrino-cache/store/memory'
       autoload :Redis,    'padrino-cache/store/redis'
       autoload :Mongo,    'padrino-cache/store/mongo'
-    end # Store
-  end # Cache
-end # Padrino
+    end
+  end
+end

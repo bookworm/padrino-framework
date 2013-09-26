@@ -1,6 +1,6 @@
 module Padrino
   ##
-  # This class is an extended version of Rack::URLMap
+  # This class is an extended version of Rack::URLMap.
   #
   # Padrino::Router like Rack::URLMap dispatches in such a way that the
   # longest paths are tried first, since they are most specific.
@@ -9,7 +9,7 @@ module Padrino
   #
   # * Map a path to the specified App
   # * Ignore server names (this solve issues with vhost and domain aliases)
-  # * Use hosts instead of server name for mappings (this help us with our vhost and doman aliases)
+  # * Use hosts instead of server name for mappings (this help us with our vhost and domain aliases)
   #
   # @example
   #
@@ -26,8 +26,6 @@ module Padrino
   #
   # @api semipublic
   class Router
-
-    # Constructs a new route mapper instance
     def initialize(*mapping, &block)
       @mapping = []
       mapping.each { |m| map(m) }
@@ -68,14 +66,14 @@ module Padrino
     end
 
     # The call handler setup to route a request given the mappings specified.
-    # @api private
     def call(env)
-      rPath = env["PATH_INFO"].to_s
+      path_info = env["PATH_INFO"].to_s
       script_name = env['SCRIPT_NAME']
-      hHost, sName, sPort = env.values_at('HTTP_HOST','SERVER_NAME','SERVER_PORT')
+      http_host = env['HTTP_HOST']
+
       @mapping.each do |host, path, match, app|
-        next unless host.nil? || hHost =~ host
-        next unless rPath =~ match && rest = $1
+        next unless host.nil? || http_host =~ host
+        next unless path_info =~ match && rest = $1
         next unless rest.empty? || rest[0] == ?/
 
         rest = "/" if rest.empty?
@@ -85,14 +83,13 @@ module Padrino
             'SCRIPT_NAME' => (script_name + path),
             'PATH_INFO'   => rest))
       end
-      [404, {"Content-Type" => "text/plain", "X-Cascade" => "pass"}, ["Not Found: #{rPath}"]]
+      [404, {"Content-Type" => "text/plain", "X-Cascade" => "pass"}, ["Not Found: #{path_info}"]]
     end
 
     private
 
-    # Sorts the mapped routes in consistent order
     def sort!
       @mapping = @mapping.sort_by { |h, p, m, a| -p.size }
     end
-  end # Router
-end # Padrino
+  end
+end

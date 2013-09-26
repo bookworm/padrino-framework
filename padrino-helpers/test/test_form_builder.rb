@@ -4,6 +4,10 @@ require File.expand_path(File.dirname(__FILE__) + '/fixtures/markup_app/app')
 describe "FormBuilder" do
   include Padrino::Helpers::FormHelpers
 
+  def app
+    MarkupDemo
+  end
+
   # Dummy form builder for testing
   module Padrino::Helpers::FormBuilder
     class FakeFormBuilder < AbstractFormBuilder
@@ -11,16 +15,12 @@ describe "FormBuilder" do
     end
   end
 
-  def app
-    MarkupDemo.tap { |app| app.set :environment, :test }
-  end
-
   def setup
     role_types = [mock_model('Role', :name => "Admin", :id => 1),
       mock_model('Role', :name => 'Moderate', :id => 2),  mock_model('Role', :name => 'Limited', :id => 3)]
     @user = mock_model("User", :first_name => "Joe", :email => '', :session_id => 54)
     @user.stubs(:errors => {:a => "must be present", :b => "must be valid", :email => "Must be valid", :first_name => []})
-    @user.stubs(:role_types => role_types, :role => "1")
+    @user.stubs(:role_types => role_types, :role => "1", :roles => [1,3])
     @user_none = mock_model("User")
   end
 
@@ -49,8 +49,7 @@ describe "FormBuilder" do
     end
 
     should "display form specifying default builder setting" do
-      self.expects(:settings).returns(stub(:default_builder => 'FakeFormBuilder')).once
-      actual_html = ""
+      self.expects(:settings).returns(stub(:default_builder => 'FakeFormBuilder', :protect_from_csrf => false)).at_least_once
       actual_html = form_for(@user, '/register', :id => 'register', :"accept-charset" => "UTF-8", :method => 'post') { |f| f.foo_field }
       assert_has_tag('form', :"accept-charset" => "UTF-8", :action => '/register', :method => 'post') { actual_html }
       assert_has_tag('span', :content => "bar") { actual_html }
@@ -59,6 +58,16 @@ describe "FormBuilder" do
     should "display correct form html with remote option" do
       actual_html = form_for(@user, '/update', :"accept-charset" => "UTF-8", :remote => true) { "Demo" }
       assert_has_tag('form', :"accept-charset" => "UTF-8", :action => '/update', :method => 'post', "data-remote" => 'true') { actual_html }
+    end
+
+    should "display correct form html with namespace option" do
+      actual_html = form_for(@user, '/update', :namespace => 'foo') do |f|
+        f.text_field(:first_name) << f.fields_for(:role_types) { |role| role.text_field(:name) }
+      end
+
+      assert_has_no_tag(:form, :namespace => 'foo') { actual_html }
+      assert_has_tag(:input, :type => 'text', :name => 'user[first_name]', :id => 'foo_user_first_name') { actual_html }
+      assert_has_tag(:input, :type => 'text', :name => 'user[role_types_attributes][0][name]', :id => 'foo_user_role_types_attributes_0_name') { actual_html }
     end
 
     should "display correct form html with remote option and method put" do
@@ -103,6 +112,7 @@ describe "FormBuilder" do
       assert_have_selector :form, :action => '/demo', :id => 'demo'
       assert_have_selector :form, :action => '/another_demo', :id => 'demo2', :method => 'get'
       assert_have_selector :form, :action => '/third_demo', :id => 'demo3', :method => 'get'
+      assert_have_selector :input, :name => 'authenticity_token'
     end
 
     should "display correct form in erb" do
@@ -110,6 +120,7 @@ describe "FormBuilder" do
       assert_have_selector :form, :action => '/demo', :id => 'demo'
       assert_have_selector :form, :action => '/another_demo', :id => 'demo2', :method => 'get'
       assert_have_selector :form, :action => '/third_demo', :id => 'demo3', :method => 'get'
+      assert_have_selector :input, :name => 'authenticity_token'
     end
 
     should "display correct form in slim" do
@@ -117,6 +128,7 @@ describe "FormBuilder" do
       assert_have_selector :form, :action => '/demo', :id => 'demo'
       assert_have_selector :form, :action => '/another_demo', :id => 'demo2', :method => 'get'
       assert_have_selector :form, :action => '/third_demo', :id => 'demo3', :method => 'get'
+      assert_have_selector :input, :name => 'authenticity_token'
     end
 
     should "have a class of 'invalid' for fields with errors" do
@@ -251,6 +263,12 @@ describe "FormBuilder" do
     should "display correct label html" do
       actual_html = standard_builder.label(:first_name, :class => 'large', :caption => "F. Name: ")
       assert_has_tag('label', :class => 'large', :for => 'user_first_name', :content => "F. Name: ") { actual_html }
+    end
+
+    should "set specific content inside the label if a block was provided" do
+      actual_html = standard_builder.label(:admin, :class => 'large') { input_tag :checkbox }
+      assert_has_tag('label', :class => 'large', :for => 'user_admin', :content => "Admin: ") { actual_html }
+      assert_has_tag('label input[type=checkbox]') { actual_html }
     end
 
     should "display correct label in haml" do
@@ -492,6 +510,37 @@ describe "FormBuilder" do
     end
   end
 
+  context 'for #check_box_group and #radio_button_group methods' do
+    should 'display checkbox group html' do
+      checkboxes = standard_builder.check_box_group(:role, :collection => @user.role_types, :fields => [:name, :id], :selected => [2,3])
+      assert_has_tag('input[type=checkbox]', :value => '1') { checkboxes }
+      assert_has_no_tag('input[type=checkbox][checked]', :value => '1') { checkboxes }
+      assert_has_tag('input[type=checkbox]', :checked => 'checked', :value => '2') { checkboxes }
+      assert_has_tag('label[for=user_role_3] input[name="user[role][]"][value="3"][checked]') { checkboxes }
+    end
+
+    should 'display checkbox group html and extract selected values from the object' do
+      checkboxes = standard_builder.check_box_group(:roles, :collection => @user.role_types, :fields => [:name, :id])
+      assert_has_tag('input[type=checkbox][name="user[roles][]"][value="1"][checked]') { checkboxes }
+      assert_has_tag('input[type=checkbox][name="user[roles][]"][value="3"][checked]') { checkboxes }
+      assert_has_no_tag('input[type=checkbox][name="user[roles][]"][value="2"][checked]') { checkboxes }
+    end
+
+    should 'display radio group html' do
+      radios = standard_builder.radio_button_group(:role, :options => %W(red yellow blue), :selected => 'yellow')
+      assert_has_tag('input[type=radio]', :value => 'red') { radios }
+      assert_has_no_tag('input[type=radio][checked]', :value => 'red') { radios }
+      assert_has_tag('input[type=radio]', :checked => 'checked', :value => 'yellow') { radios }
+      assert_has_tag('label[for=user_role_blue] input[name="user[role]"][value=blue]') { radios }
+    end
+
+    should 'display radio group html and extract selected value from the object' do
+      radios = standard_builder.radio_button_group(:role, :collection => @user.role_types)
+      assert_has_tag('input[type=radio][value="1"][checked]') { radios }
+      assert_has_no_tag('input[type=radio][value="2"][checked]') { radios }
+    end
+  end
+
   context 'for #radio_button method' do
     should "display correct radio button html" do
       actual_html = standard_builder.radio_button(:gender, :value => 'male', :class => 'large')
@@ -615,6 +664,17 @@ describe "FormBuilder" do
       assert_have_selector '#demo  input.user-photo', :type => 'file', :name => 'markup_user[photo]', :id => 'markup_user_photo'
       assert_have_selector '#demo2 input.upload', :type => 'file', :name => 'markup_user[photo]', :id => 'markup_user_photo'
     end
+
+    should "display correct form html with multipart, even if no 'multipart' option is specified" do
+      actual_html = form_for(@user, '/register', :"accept-charset" => "UTF-8") { |f| f.file_field :photo }
+      assert_has_tag('form', :"accept-charset" => "UTF-8", :action => '/register', :enctype => "multipart/form-data") { actual_html }
+    end
+
+    should "display correct form html without multipart, if 'multipart' option is specified 'false'" do
+      actual_html = form_for(@user, '/register', :"accept-charset" => "UTF-8", :multipart => false) { |f| f.file_field :photo }
+      assert_has_no_tag('form', :"accept-charset" => "UTF-8", :action => '/register', :enctype => "multipart/form-data") { actual_html }
+    end
+
   end
 
   context 'for #select method' do
@@ -700,6 +760,18 @@ describe "FormBuilder" do
     should "display correct submit button html with no options" do
       actual_html = standard_builder.submit
       assert_has_tag('input[type=submit]', :value => "Submit") { actual_html }
+    end
+
+
+    should "display correct submit button html with no caption" do
+      actual_html = standard_builder.submit(:class => 'btn')
+      assert_has_tag('input.btn[type=submit]', :value => "Submit") { actual_html }
+    end
+
+    should "display correct submit button html with nil caption" do
+      actual_html = standard_builder.submit(nil, :class => 'btn')
+      assert_has_tag('input.btn[type=submit]') { actual_html }
+      assert actual_html !~ %r{ value \* = }x
     end
 
     should "display correct submit button html" do

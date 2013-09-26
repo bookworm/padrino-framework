@@ -3,7 +3,7 @@ require File.expand_path(File.dirname(__FILE__) + '/fixtures/render_app/app')
 
 describe "RenderHelpers" do
   def app
-    RenderDemo.tap { |app| app.set :environment, :test }
+    RenderDemo
   end
 
   context 'for #partial method and object' do
@@ -71,6 +71,24 @@ describe "RenderHelpers" do
       assert_have_selector 'p.erb span',   :content => "erb"
       assert_have_selector 'p.slim span',  :content => "slim"
       assert_have_selector 'p.end',   :content => "haml"
+    end
+
+    should "capture slim template once and only once" do
+      $number_of_captures = 0
+      visit '/double_capture_slim'
+      assert_equal 1,$number_of_captures
+    end
+
+    should "capture haml template once and only once" do
+      $number_of_captures = 0
+      visit '/double_capture_haml'
+      assert_equal 1,$number_of_captures
+    end
+
+    should "capture erb template once and only once" do
+      $number_of_captures = 0
+      visit '/double_capture_erb'
+      assert_equal 1,$number_of_captures
     end
   end
 end

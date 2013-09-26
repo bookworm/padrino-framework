@@ -3,7 +3,7 @@ require File.expand_path(File.dirname(__FILE__) + '/fixtures/markup_app/app')
 
 describe "TagHelpers" do
   def app
-    MarkupDemo.tap { |app| app.set :environment, :test }
+    MarkupDemo
   end
 
   context 'for #tag method' do
@@ -37,8 +37,8 @@ describe "TagHelpers" do
     end
 
     should "escape html" do
-      actual_html = tag(:br, :class => 'Example "bar"')
-      assert_equal "<br class=\"Example &quot;bar&quot;\" />", actual_html
+      actual_html = tag(:br, :class => 'Example <foo> & "bar"')
+      assert_equal "<br class=\"Example &lt;foo&gt; &amp; &quot;bar&quot;\" />", actual_html
     end
   end
 
@@ -51,6 +51,17 @@ describe "TagHelpers" do
     should "support tags with content as block" do
       actual_html = content_tag(:p, :class => 'large', :id => 'star') { "Demo" }
       assert_has_tag('p.large#star', :content => "Demo") { actual_html }
+    end
+
+    should "escape non-html-safe content" do
+      actual_html = content_tag(:p, :class => 'large', :id => 'star') { "<>" }
+      assert_has_tag('p.large#star') { actual_html }
+      assert_match('&lt;&gt;', actual_html)
+    end
+
+    should "not escape html-safe content" do
+      actual_html = content_tag(:p, :class => 'large', :id => 'star') { "<>" }
+      assert_has_tag('p.large#star', :content => "<>") { actual_html }
     end
 
     should "support tags with erb" do

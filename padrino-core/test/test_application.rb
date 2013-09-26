@@ -56,6 +56,15 @@ describe "Application" do
       assert_equal PadrinoTestApp.session_secret, PadrinoTestApp2.session_secret
     end
 
+    should 'be able to configure_apps multiple times' do
+      Padrino.configure_apps { set :foo1, "bar" }
+      Padrino.configure_apps { set :foo1, "bam" }
+      Padrino.configure_apps { set :foo2, "baz" }
+      PadrinoTestApp.send(:default_configuration!)
+      assert_equal "bam", PadrinoTestApp.settings.foo1, "should have foo1 assigned to bam"
+      assert_equal "baz", PadrinoTestApp.settings.foo2, "should have foo2 assigned to baz"
+    end
+
     should "have shared sessions accessible in project" do
       Padrino.configure_apps { enable :sessions; set :session_secret, 'secret' }
       Padrino.mount("PadrinoTestApp").to("/write")
@@ -71,22 +80,22 @@ describe "Application" do
     end
 
     # compare to: test_routing: allow global provides
-    should "set content_type to :html if none can be determined" do
+    should "set content_type to nil if none can be determined" do
       mock_app do
         provides :xml
 
-        get("/foo"){ "Foo in #{content_type}" }
-        get("/bar"){ "Foo in #{content_type}" }
+        get("/foo"){ "Foo in #{content_type.inspect}" }
+        get("/bar"){ "Foo in #{content_type.inspect}" }
       end
 
       get '/foo', {}, { 'HTTP_ACCEPT' => 'application/xml' }
-      assert_equal 'Foo in xml', body
+      assert_equal 'Foo in :xml', body
       get '/foo'
-      assert_equal 'Foo in xml', body
+      assert_equal 'Foo in :xml', body
 
       get '/bar', {}, { 'HTTP_ACCEPT' => 'application/xml' }
-      assert_equal "Foo in html", body
-    end # content_type to :html
+      assert_equal "Foo in nil", body
+    end
 
     context "errors" do
       should "haven't mapped errors on development" do

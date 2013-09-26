@@ -3,7 +3,7 @@ AR = (<<-AR) unless defined?(AR)
 # You can use other adapters like:
 #
 #   ActiveRecord::Base.configurations[:development] = {
-#     :adapter   => 'mysql',
+#     :adapter   => 'mysql2',
 #     :encoding  => 'utf8',
 #     :reconnect => true,
 #     :database  => 'your_database',
@@ -29,11 +29,11 @@ ActiveRecord::Base.configurations[:test] = {
 # Setup our logger
 ActiveRecord::Base.logger = logger
 
-# Raise exception on mass assignment protection for Active Record models
+# Raise exception on mass assignment protection for Active Record models.
 ActiveRecord::Base.mass_assignment_sanitizer = :strict
 
 # Log the query plan for queries taking more than this (works
-# with SQLite, MySQL, and PostgreSQL)
+# with SQLite, MySQL, and PostgreSQL).
 ActiveRecord::Base.auto_explain_threshold_in_seconds = 0.5
 
 # Include Active Record class name as root for JSON serialized output.
@@ -45,11 +45,11 @@ ActiveRecord::Base.store_full_sti_class = true
 # Use ISO 8601 format for JSON serialized times and dates.
 ActiveSupport.use_standard_json_time_format = true
 
-# Don't escape HTML entities in JSON, leave that for the #json_escape helper.
-# if you're including raw json in an HTML page.
+# Don't escape HTML entities in JSON, leave that for the #json_escape helper
+# if you're including raw JSON in an HTML page.
 ActiveSupport.escape_html_entities_in_json = false
 
-# Now we can estabilish connection with our db
+# Now we can establish connection with our db.
 ActiveRecord::Base.establish_connection(ActiveRecord::Base.configurations[Padrino.env])
 AR
 
@@ -94,14 +94,15 @@ SQLITE
 
 def setup_orm
   ar = AR
-  db = @app_name.underscore
+  db = @project_name.underscore
+  # We're now defaulting to mysql2 since mysql is deprecated
   case options[:adapter]
-  when 'mysql'
+  when 'mysql-gem'
     ar.gsub! /!DB_DEVELOPMENT!/, MYSQL.gsub(/!DB_NAME!/,"'#{db}_development'")
     ar.gsub! /!DB_PRODUCTION!/, MYSQL.gsub(/!DB_NAME!/,"'#{db}_production'")
     ar.gsub! /!DB_TEST!/, MYSQL.gsub(/!DB_NAME!/,"'#{db}_test'")
-    require_dependencies 'mysql'
-  when 'mysql2'
+    require_dependencies 'mysql', :version => "~> 2.8.1"
+  when 'mysql', 'mysql2'
     ar.gsub! /!DB_DEVELOPMENT!/, MYSQL2.gsub(/!DB_NAME!/,"'#{db}_development'")
     ar.gsub! /!DB_PRODUCTION!/, MYSQL2.gsub(/!DB_NAME!/,"'#{db}_production'")
     ar.gsub! /!DB_TEST!/, MYSQL2.gsub(/!DB_NAME!/,"'#{db}_test'")
@@ -117,7 +118,7 @@ def setup_orm
     ar.gsub! /!DB_TEST!/, SQLITE.gsub(/!DB_NAME!/,"Padrino.root('db', '#{db}_test.db')")
     require_dependencies 'sqlite3'
   end
-  require_dependencies 'activerecord', :require => 'active_record'
+  require_dependencies 'activerecord', :require => 'active_record', :version => ">= 3.1"
   insert_middleware 'ActiveRecord::ConnectionAdapters::ConnectionManagement'
   create_file("config/database.rb", ar)
 end
@@ -148,7 +149,7 @@ class !FILECLASS! < ActiveRecord::Migration
 end
 MIGRATION
 
-AR_MODEL_UP_MG = (<<-MIGRATION) unless defined?(AR_MODEL_UP_MG)
+AR_MODEL_UP_MG = (<<-MIGRATION).gsub(/^/,'    ') unless defined?(AR_MODEL_UP_MG)
 create_table :!TABLE! do |t|
   !FIELDS!
   t.timestamps

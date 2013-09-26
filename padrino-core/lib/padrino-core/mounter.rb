@@ -1,31 +1,33 @@
 module Padrino
   ##
-  # Represents a particular mounted padrino application
-  # Stores the name of the application (app folder name) and url mount path
+  # Represents a particular mounted Padrino application.
+  # Stores the name of the application (app folder name) and url mount path.
   #
   # @example
   #   Mounter.new("blog_app", :app_class => "Blog").to("/blog")
   #   Mounter.new("blog_app", :app_file => "/path/to/blog/app.rb").to("/blog")
   #
   class Mounter
-    class MounterException < RuntimeError # @private
+    class MounterException < RuntimeError
     end
 
     attr_accessor :name, :uri_root, :app_file, :app_class, :app_root, :app_obj, :app_host
 
     ##
     # @param [String, Padrino::Application] name
-    #   The app name or the {Padrino::Application} class
+    #   The app name or the {Padrino::Application} class.
     #
     # @param [Hash] options
     # @option options [Symbol] :app_class (Detected from name)
     # @option options [Symbol] :app_file (Automatically detected)
     # @option options [Symbol] :app_obj (Detected)
     # @option options [Symbol] :app_root (Directory of :app_file)
+    # @option options [Symbol] :gem The gem to load the app from (Detected from name)
     #
     def initialize(name, options={})
       @name      = name.to_s
       @app_class = options[:app_class] || @name.camelize
+      @gem       = options[:gem]       || @app_class.split("::").first.underscore
       @app_file  = options[:app_file]  || locate_app_file
       @app_obj   = options[:app_obj]   || app_constant || locate_app_object
       ensure_app_file! || ensure_app_object!
@@ -35,10 +37,10 @@ module Padrino
     end
 
     ##
-    # Registers the mounted application onto Padrino
+    # Registers the mounted application onto Padrino.
     #
     # @param [String] mount_url
-    #   Path where we mount the app
+    #   Path where we mount the app.
     #
     # @example
     #   Mounter.new("blog_app").to("/blog")
@@ -50,10 +52,10 @@ module Padrino
     end
 
     ##
-    # Registers the mounted application onto Padrino for the given host
+    # Registers the mounted application onto Padrino for the given host.
     #
     # @param [String] mount_host
-    #   Host name
+    #   Host name.
     #
     # @example
     #   Mounter.new("blog_app").to("/blog").host("blog.padrino.org")
@@ -67,8 +69,8 @@ module Padrino
     end
 
     ##
-    # Maps Padrino application onto a Padrino::Router
-    # For use in constructing a Rack application
+    # Maps Padrino application onto a Padrino::Router.
+    # For use in constructing a Rack application.
     #
     # @param [Padrino::Router]
     #
@@ -90,31 +92,31 @@ module Padrino
     end
 
     ###
-    # Returns the route objects for the mounted application
+    # Returns the route objects for the mounted application.
     #
     def routes
       app_obj.routes
     end
 
     ###
-    # Returns the basic route information for each named route
+    # Returns the basic route information for each named route.
     #
     # @return [Array]
-    #   Array of routes
+    #   Array of routes.
     #
     def named_routes
       app_obj.routes.map { |route|
-        name_array     = "(#{route.named.to_s.split("_").map { |piece| %Q[:#{piece}] }.join(", ")})"
-        request_method = route.conditions[:request_method][0]
-        next if route.named.blank? || request_method == 'HEAD'
+        name_array     = "(#{route.name.to_s.split("_").map { |piece| %Q[:#{piece}] }.join(", ")})"
+        request_method = route.request_methods.first
+        next if route.name.blank? || request_method == 'HEAD'
         original_path = route.original_path.is_a?(Regexp) ? route.original_path.inspect : route.original_path
         full_path = File.join(uri_root, original_path)
-        OpenStruct.new(:verb => request_method, :identifier => route.named, :name => name_array, :path => full_path)
+        OpenStruct.new(:verb => request_method, :identifier => route.name, :name => name_array, :path => full_path)
       }.compact
     end
 
     ##
-    # Makes two Mounters equal if they have the same name and uri_root
+    # Makes two Mounters equal if they have the same name and uri_root.
     #
     # @param [Padrino::Mounter] other
     #
@@ -124,7 +126,7 @@ module Padrino
 
     ##
     # @return [Padrino::Application]
-    #  the class object for the app if defined, nil otherwise
+    #  the class object for the app if defined, nil otherwise.
     #
     def app_constant
       klass = Object
@@ -140,44 +142,51 @@ module Padrino
     end
 
     protected
-      ##
-      # Locates and requires the file to load the app constant
-      #
-      def locate_app_object
-        @_app_object ||= begin
-          ensure_app_file!
-          Padrino.require_dependencies(app_file)
-          app_constant
+    ##
+    # Locates and requires the file to load the app constant.
+    #
+    def locate_app_object
+      @_app_object ||= begin
+        ensure_app_file!
+        Padrino.require_dependencies(app_file)
+        app_constant
+      end
+    end
+
+    ##
+    # Returns the determined location of the mounted application main file.
+    #
+    def locate_app_file
+      candidates  = []
+      candidates << app_constant.app_file if app_constant.respond_to?(:app_file) && File.exist?(app_constant.app_file.to_s)
+      candidates << Padrino.first_caller if File.identical?(Padrino.first_caller.to_s, Padrino.called_from.to_s)
+      candidates << Padrino.mounted_root(name.downcase, "app.rb")
+      simple_name = name.split("::").last.downcase
+      mod_name = name.split("::")[0..-2].join("::")
+      Padrino.modules.each do |mod|
+        if mod.name == mod_name
+          candidates << mod.root(simple_name, "app.rb")
         end
       end
+      candidates << Padrino.root("app", "app.rb")
+      candidates.find { |candidate| File.exist?(candidate) }
+    end
 
-      ##
-      # Returns the determined location of the mounted application main file
-      #
-      def locate_app_file
-        candidates  = []
-        candidates << app_constant.app_file if app_constant.respond_to?(:app_file) && File.exist?(app_constant.app_file.to_s)
-        candidates << Padrino.first_caller if File.identical?(Padrino.first_caller.to_s, Padrino.called_from.to_s)
-        candidates << Padrino.mounted_root(name.downcase, "app.rb")
-        candidates << Padrino.root("app", "app.rb")
-        candidates.find { |candidate| File.exist?(candidate) }
-      end
+    ###
+    # Raises an exception unless app_file is located properly.
+    #
+    def ensure_app_file!
+      message = "Unable to locate source file for app '#{app_class}', try with :app_file => '/path/app.rb'"
+      raise MounterException, message unless @app_file
+    end
 
-      ###
-      # Raises an exception unless app_file is located properly
-      #
-      def ensure_app_file!
-        message = "Unable to locate source file for app '#{app_class}', try with :app_file => '/path/app.rb'"
-        raise MounterException, message unless @app_file
-      end
-
-      ###
-      # Raises an exception unless app_obj is defined properly
-      #
-      def ensure_app_object!
-        message = "Unable to locate app for '#{app_class}', try with :app_class => 'MyAppClass'"
-        raise MounterException, message unless @app_obj
-      end
+    ###
+    # Raises an exception unless app_obj is defined properly.
+    #
+    def ensure_app_object!
+      message = "Unable to locate app for '#{app_class}', try with :app_class => 'MyAppClass'"
+      raise MounterException, message unless @app_obj
+    end
   end
 
   class << self
@@ -187,7 +196,7 @@ module Padrino
     # @param [Array] args
     #
     # @return [String]
-    #   the root to the mounted apps base directory
+    #   the root to the mounted apps base directory.
     #
     def mounted_root(*args)
       Padrino.root(@mounted_root ||= "", *args)
@@ -202,7 +211,7 @@ module Padrino
     end
 
     ##
-    # Inserts a Mounter object into the mounted applications (avoids duplicates)
+    # Inserts a Mounter object into the mounted applications (avoids duplicates).
     #
     # @param [Padrino::Mounter] mounter
     #
@@ -211,7 +220,7 @@ module Padrino
     end
 
     ##
-    # Mounts a new sub-application onto Padrino project
+    # Mounts a new sub-application onto Padrino project.
     #
     # @see Padrino::Mounter#new
     #
@@ -221,5 +230,5 @@ module Padrino
     def mount(name, options={})
       Mounter.new(name, options)
     end
-  end # Mounter
-end # Padrino
+  end
+end

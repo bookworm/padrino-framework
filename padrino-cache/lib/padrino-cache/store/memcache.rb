@@ -4,7 +4,7 @@ module Padrino
       ##
       # Memcache Cache Store
       #
-      class Memcache
+      class Memcache < Base
         ##
         # Initialize Memcache store with client connection.
         #
@@ -18,24 +18,21 @@ module Padrino
         #   set :cache, Padrino::Cache::Store::Memcache.new(::Memcached.new('127.0.0.1:11211'))
         #   set :cache, Padrino::Cache::Store::Memcache.new(::Memcached.new('127.0.0.1:11211', :exception_retry_limit => 1))
         #
-        # @api public
-        def initialize(client)
+        def initialize(client, options={})
           @backend = client
-        rescue
-          raise
+          super(options)
+          @never = 0  # never TTL in Memcache is 0
         end
 
         ##
-        # Return the a value for the given key
+        # Return the value for the given key.
         #
         # @param [String] key
         #   cache key to retrieve value
         #
         # @example
-        #   # with MyApp.cache.set('records', records)
         #   MyApp.cache.get('records')
         #
-        # @api public
         def get(key)
           @backend.get(key)
         rescue Memcached::NotFound
@@ -43,7 +40,7 @@ module Padrino
         end
 
         ##
-        # Set the value for a given key and optionally with an expire time
+        # Set the value for a given key and optionally with an expire time.
         # Default expiry time is 86400.
         #
         # @param [String] key
@@ -55,45 +52,34 @@ module Padrino
         #   MyApp.cache.set('records', records)
         #   MyApp.cache.set('records', records, :expires_in => 30) # => 30 seconds
         #
-        # @api public
         def set(key, value, opts = nil)
-          if opts && opts[:expires_in]
-            expires_in = opts[:expires_in].to_i
-            expires_in = (@backend.class.name == "MemCache" ? expires_in : Time.new.to_i + expires_in) if expires_in < EXPIRES_EDGE
-            @backend.set(key, value, expires_in)
-          else
-            @backend.set(key, value)
-          end
+          @backend.set(key, value, get_expiry(opts))
         end
 
         ##
-        # Delete the value for a given key
+        # Delete the value for a given key.
         #
         # @param [String] key
         #   cache key
         #
         # @example
-        #   # with: MyApp.cache.set('records', records)
         #   MyApp.cache.delete('records')
         #
-        # @api public
         def delete(key)
           @backend.delete(key)
         end
 
         ##
-        # Reinitialize your cache
+        # Reinitialize your cache.
         #
         # @example
-        #   # with: MyApp.cache.set('records', records)
         #   MyApp.cache.flush
         #   MyApp.cache.get('records') # => nil
         #
-        # @api public
         def flush
           @backend.respond_to?(:flush_all) ? @backend.flush_all : @backend.flush
         end
-      end # Memcached
-    end # Store
-  end # Cache
-end # Padrino
+      end
+    end
+  end
+end
